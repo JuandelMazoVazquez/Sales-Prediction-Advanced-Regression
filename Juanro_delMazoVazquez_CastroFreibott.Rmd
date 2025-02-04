@@ -1,0 +1,3233 @@
+---
+title: "Predictive Modeling Techniques in Big Data Analytics: Advanced Regression and Prediction"
+author: 
+  - name: "Juan del Mazo Vázquez"
+    id: "123456789"
+  - name: "Rodrigo Castro Freibott"
+    id: "123456789"
+date: "2025-01-19"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    collapsed: true
+    smooth_scroll: true
+    theme: journal
+    highlight: kate
+    df_print: paged
+    code_folding: show
+---
+
+# Introduction
+
+This report presents **Homework 2** for the course *Predictive Modeling* as part of the **Master in Big Data Analytics**. The focus is on **Advanced Regression and Prediction** (Topic 3), building upon foundational concepts of linear and generalized linear models. The main objectives are:
+
+The objective of this study is to apply advanced regression and prediction techniques to analyze and forecast outcomes in the **Sales Dataset**.This dataset includes various predictors, such as investments in advertising channels (e.g., Meta, TikTok, TV, Radio), web traffic, and other marketing-related factors, alongside the target variable, sales.
+
+The **objectives** of this analysis are:
+
+- **Predictive Accuracy**: Developing robust predictive models using advanced regression techniques.
+
+- **Interpretability and Insights**: Exploring the relationships between investment-related variables and predicted sales to provide actionable insights for optimizing marketing strategies.
+
+The analysis was **structured** as follows to ensure a systematic and comprehensive approach:
+
+1. **Data Preparation**: Load and preprocess the datasets, addressing missing values, transforming variables, and engineering additional features.
+
+2. **Exploratory Data Analysis (EDA)**: Visualize the distribution of key variables, analyze their relationship with the target, and study their sparsity.
+
+3. **Predictive Analysis**: Train multiple advanced regression models, including regularization methods (Elastic Net), tree-based methods (Random Forest, XGBoost), k-Nearest Neighbors (KNN), neural networks, and ensemble approaches (stacking and weighted ensembles).
+   
+4. **Hyperparameter Tuning**: Optimize hyperparameters for each model using cross-validation on a training dataset.
+
+5. **Model Evaluation**: Evaluate models using Mean Absolute Error (MAE) on a validation dataset.
+
+6. **Submission of Predictions**: Retrain selected models on the combined dataset and generate final predictions for the testing dataset (with unknown ground-truth sales).
+   
+7. **Final Analysis**: Conduct a detailed analysis of investment-related variables to provide actionable recommendations for future strategies.
+
+# Libraries Used
+
+The following R libraries were employed to streamline the analysis and meet the explanatory requirements of the task:
+
+## Libraries and Their Functions:
+
+- **tidyverse**: A collection of R packages designed for seamless data science tasks such as:
+
+  - Data manipulation (`dplyr`)
+  
+  - Visualization (`ggplot2`)
+  
+  - Data tidying (`tidyr`)
+
+- **caret**: A powerful library for machine learning tasks, including:
+
+  - Data partitioning
+  
+  - Training models
+  
+  - Model performance evaluation
+
+- **glmnet**: Implements elastic net regularization, including Lasso and Ridge regression.
+
+- **randomForest**: A popular package for training Random Forest models.
+
+- **xgboost**: An optimized gradient boosting framework designed for speed and performance.
+
+- **broom**: Provides tools to cleanly organize statistical outputs (e.g., regression summaries) into tidy data frames.
+
+- **tidymodels**: A collection of packages to streamline machine learning workflows, including data splitting, model building, and evaluation, with a consistent framework.
+
+- **patchwork**: A library designed to simplify the creation of multi-panel plots by combining individual ggplot2 objects into a cohesive layout. This is particularly useful when visualizing relationships or comparisons across multiple variables in a single view. It allows users to arrange plots using a simple grammar, enabling flexible layouts without requiring complex coding.
+
+- **reshape2**: Assists in reshaping data to formats suitable for heatmaps or other visualizations.
+
+- **gridExtra**: Facilitates the arrangement of multiple plots into cohesive visual layouts.
+
+## Installation and Loading
+
+To ensure reproducibility, the following libraries were installed and loaded at the beginning of the analysis:
+
+```{r, echo=TRUE, results="hide", message=FALSE, warning=FALSE}
+# Install necessary packages
+# install.packages(c("tidyverse", "caret", "glmnet", "randomForest", "xgboost", "broom", "tidymodels", "patchwork", "reshape2", "gridExtra", "ggpubr"), repos = "https://cran.r-project.org")
+
+# Load libraries
+library(tidyverse)
+library(caret)
+library(glmnet)
+library(randomForest)
+library(xgboost)
+library(broom)
+library(tidymodels)
+library(patchwork)
+library(reshape2)
+library(gridExtra)
+library(ggpubr)
+```
+
+# Dataset Description
+
+## Dataset Content:
+
+The dataset provides information on sales and various predictors, including investment-related variables and online/offline factors. Below is a representative subset of the features:
+
+- **Monday_date**: Start date of the week (Monday).  
+- **Sales**: Weekly sales in numerical format.  
+- **Stores**: Number of physical stores contributing to sales.  
+- **Affiliates_investment**: Spend on affiliate marketing programs.  
+- **Meta_investment**: Spend on Facebook/Instagram advertising.  
+- **Sea_brand**: Spend on branded search engine advertisement (SEA).  
+- **Sea_other_investment**: Spend on non-branded SEA.  
+- **TikTok_investment**: Spend on TikTok advertising.  
+- **Web_visits**: Weekly visits to the company’s website.  
+- **GBP**: Local positioning on Google (business visibility).  
+- **Database_investment**: Spend on customer relationship management or database marketing.  
+- **OOH_investment**: Spend on out-of-home ads (e.g., billboards).  
+- **TV_hbtv_investment**: Spend on connected TV ads (streaming platforms).  
+- **TV_investment**: Spend on traditional TV ads.  
+- **Radio_investment**: Spend on radio ads.  
+
+All features are **Numerical Variables** (there are no categorical features).
+
+# Loading the Dataset
+
+The dataset is loaded into R for further analysis. Below, the dataset is displayed to gain an initial understanding of its structure and content.
+
+```{r}
+# Load the dataset
+sales_data <- readxl::read_excel("Real_Dataset_HW2.xlsx")
+
+# Display the dataset
+sales_data
+```
+
+# Data Cleaning
+
+In this section, the dataset is cleaned, and summary statistics are computed both before and after the cleaning process. The process involves splitting the data into training and test sets, followed by handling missing data, transforming variables, and preparing the dataset for predictive modeling.
+
+## Initial Dataset Exploration: Summary Statistics
+
+Before performing the cleaning process, summary statistics for numerical features were calculated to understand the initial state of the dataset. Key metrics, including mean, median, and standard deviation, are presented below to provide an overview of the dataset's structure and variability. This analysis helps identify potential issues such as skewness, outliers, or inconsistencies that need to be addressed during the data cleaning process.
+
+```{r}
+# Calculate summary statistics for numerical features
+sales_summary <- sales_data %>%
+  summarise(
+    across(where(is.numeric), 
+           list(
+             Mean = ~round(mean(.x, na.rm = TRUE), 2),
+             Median = ~round(median(.x, na.rm = TRUE), 2),
+             SD = ~round(sd(.x, na.rm = TRUE), 2)
+           ))
+  )
+
+# Create clean dataframe with just the statistics we want
+sales_summary_clean <- data.frame(
+  Mean = unlist(sales_summary[grep("_Mean$", names(sales_summary))]),
+  Median = unlist(sales_summary[grep("_Median$", names(sales_summary))]),
+  SD = unlist(sales_summary[grep("_SD$", names(sales_summary))])
+)
+
+# Add row names (features) without the _Mean suffix
+row.names(sales_summary_clean) <- names(sales_data)[sapply(sales_data, is.numeric)]
+
+# Display results
+cat("\nSummary Statistics:\n")
+print(sales_summary_clean)
+```
+
+These statistics reveal the current **investment behavior** of the company behind the dataset:
+
+- TV is the dominant advertising channel (€63,235 average spend).
+- In contrast, there is minimal, sporadic use of TikTok advertisement (€435 mean, €0 median).
+- Sales performance is stable (€3,957 mean with SD €672).
+- SEA (Search) strategy prioritizes non-branded terms (€39,012) over branded terms (€13,711), suggesting focus on customer acquisition.
+- Radio shows highly variable investment (€9,096 mean but €1,013 median), indicating campaign-based usage rather than consistent spending.
+- The number of stores shows little variability (374 mean with SD 14).
+
+## Splitting the Data into Training, Validation and Testing Sets
+
+The data is split into two primary sets, with the first set further split into two smaller sets:
+
+- **Training Set** (80% of all data): Contains rows with non-missing values in the `Sales` column, which will be used for training and validating the models. This dataset is further split into:
+
+  - **Training CV Set** (80% of training set): Used to train the models. This set will be further split into several folds to perform hyperparameter tuning with cross-validation (CV).
+  - **Validation Set** (20% of training set): Used to evaluate the models on new, unseen data.
+
+- **Test Set** (20% of all data): Contains rows where `Sales` values are missing, to be used for final prediction.
+
+Given the **time dependencies** in the dataset, it is crucial to:
+
+- Before the training/validation split, **NOT randomly shuffling** the dataset.
+- When doing hyperparameter tuning on the training CV dataset, **using a time cross-validation approach**.
+
+The following code in R implements these data splits.
+
+```{r}
+# Split the data into training and test sets based on the presence of Sales values
+train_sales_data <- sales_data %>% filter(!is.na(Sales))
+test_sales_data <- sales_data %>% filter(is.na(Sales))
+
+# Sort data chronologically
+train_sales_data <- train_sales_data %>% 
+  arrange(Monday_date)
+
+# Split training data into training CV and validation CV with time-based split (no random shuffling)
+total_weeks <- nrow(train_sales_data)
+validation_size <- floor(0.2 * total_weeks)
+split_index <- total_weeks - validation_size
+train_cv <- train_sales_data[1:split_index, ]
+val_cv <- train_sales_data[(split_index + 1):total_weeks, ]
+
+# Parameters for time series split of training CV using cross-validation
+n_iter_cv <- 3  # Desired number of CV iterations
+train_cv_weeks = nrow(train_cv)
+initial_window <- floor(0.5 * train_cv_weeks)  # 50% of data for initial training
+assessment_size <- floor((train_cv_weeks - initial_window) / n_iter_cv)  # Size of each assessment period
+ctrl <- trainControl(
+  method = "timeslice",         # Use time series cross-validation
+  initialWindow = initial_window,  # Number of weeks in initial window
+  horizon = assessment_size,     # Number of weeks to predict
+  skip = assessment_size - 1,   # Skip to next non-overlapping period
+  fixedWindow = TRUE,          # Use fixed-size training window
+  allowParallel = TRUE,        # Enable parallel processing
+  verboseIter = TRUE          # Display progress during training
+)
+
+# Print the CV structure
+cat("CV Parameters:\n")
+cat("Total weeks in training data:", total_weeks, "\n")
+cat("Number of CV iterations:", n_iter_cv, "\n")
+cat("Initial window size (weeks):", initial_window, "\n")
+cat("Assessment size (weeks):", assessment_size, "\n\n")
+
+cat("Data Splits:\n")
+cat("Training period:", format(min(train_cv$Monday_date)), "to", format(max(train_cv$Monday_date)), "\n")
+cat("Validation period:", format(min(val_cv$Monday_date)), "to", format(max(val_cv$Monday_date)), "\n")
+cat("Test period:", format(min(test_sales_data$Monday_date)), "to", format(max(test_sales_data$Monday_date)), "\n")
+```
+
+We can **visualize the data partitions** with the following code. To visualize the folds generated with cross-validation, we will train a dummy model and extract the fold information from caret: 
+
+```{r}
+# Extract fold indices from caret's trainControl
+# First create a dummy model to get the folds
+set <- train_cv  # Use our training CV data
+dummy_model <- train(
+  Sales ~ Meta_investment,  # Simplest possible model
+  data = set,
+  method = "lm",  # Linear regression
+  trControl = ctrl
+)
+
+# Extract the resampling indices
+resample_indices <- dummy_model$control$index
+assessment_indices <- dummy_model$control$indexOut
+
+# Print fold information
+cat("\nFold Information from caret:\n")
+for(i in seq_along(resample_indices)) {
+  cat(sprintf("\nFold %d:\n", i))
+  cat(sprintf("Training: %d observations (%s to %s)\n", 
+              length(resample_indices[[i]]),
+              format(min(train_cv$Monday_date[resample_indices[[i]]])),
+              format(max(train_cv$Monday_date[resample_indices[[i]]]))))
+  cat(sprintf("Assessment: %d observations (%s to %s)\n",
+              length(assessment_indices[[i]]),
+              format(min(train_cv$Monday_date[assessment_indices[[i]]])),
+              format(max(train_cv$Monday_date[assessment_indices[[i]]]))))
+}
+
+# Create a data frame for visualization of all splits
+# Add next_date column to handle the geom_rect xmax properly
+splits_df <- data.frame(
+  Monday_date = c(train_cv$Monday_date, val_cv$Monday_date, test_sales_data$Monday_date),
+  split_type = c(
+    rep("Training CV", nrow(train_cv)),
+    rep("Validation CV", nrow(val_cv)),
+    rep("Test", nrow(test_sales_data))
+  )
+) %>%
+  arrange(Monday_date) %>%
+  mutate(
+    next_date = lead(Monday_date, default = Monday_date[n()] + days(7))
+  )
+
+# Create CV folds DataFrame using caret's indices
+cv_folds <- data.frame()
+
+for(i in seq_along(resample_indices)) {
+  # Add training period
+  cv_folds <- rbind(cv_folds, data.frame(
+    Monday_date = train_cv$Monday_date[resample_indices[[i]]],
+    fold = paste("Fold", i),
+    type = "Training"
+  ))
+  
+  # Add assessment period
+  cv_folds <- rbind(cv_folds, data.frame(
+    Monday_date = train_cv$Monday_date[assessment_indices[[i]]],
+    fold = paste("Fold", i),
+    type = "Assessment"
+  ))
+}
+
+# Add next_date column for cv_folds
+cv_folds <- cv_folds %>%
+  arrange(fold, Monday_date) %>%
+  group_by(fold, type) %>%
+  mutate(
+    next_date = lead(Monday_date, default = Monday_date[n()] + days(7))
+  ) %>%
+  ungroup()
+
+# Create the main timeline plot
+main_split_plot <- ggplot() +
+  geom_rect(data = splits_df,
+            aes(xmin = Monday_date, 
+                xmax = next_date, 
+                ymin = 0, 
+                ymax = 1,
+                fill = split_type),
+            alpha = 0.3) +
+  scale_fill_manual(values = c("Training CV" = "blue", 
+                              "Validation CV" = "green", 
+                              "Test" = "red")) +
+  scale_x_datetime(date_labels = "%Y-%m-%d", date_breaks = "3 months") +
+  labs(title = "Overall Data Split Timeline",
+       x = "Date",
+       y = "") +
+  theme_minimal() +
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Create the CV folds plot
+cv_folds_plot <- ggplot() +
+  geom_rect(data = cv_folds,
+            aes(xmin = Monday_date, 
+                xmax = next_date, 
+                ymin = as.numeric(factor(fold)) - 0.4,
+                ymax = as.numeric(factor(fold)) + 0.4,
+                fill = type),
+            alpha = 0.3) +
+  scale_fill_manual(values = c("Training" = "blue", 
+                              "Assessment" = "orange")) +
+  scale_x_datetime(date_labels = "%Y-%m-%d", date_breaks = "3 months") +
+  labs(title = "Cross-Validation Folds Structure (from caret)",
+       x = "Date",
+       y = "Fold") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Combine plots using patchwork
+combined_plot <- main_split_plot / cv_folds_plot +
+  plot_layout(heights = c(1, 2))
+
+# Display the combined plot
+print(combined_plot)
+```
+
+
+## Handling Missing Values
+
+The following code checks for **the presence of `NA` values** in all columns of the respective datasets:
+
+```{r}
+# Check for NA values in training (train_cv), validation (val_cv), and test datasets
+na_summary_train <- train_sales_data %>%
+  summarise(across(everything(), ~sum(is.na(.)))) %>%
+  pivot_longer(cols = everything(), names_to = "Variable", values_to = "NA_Count")
+
+na_summary_test <- test_sales_data %>%
+  summarise(across(everything(), ~sum(is.na(.)))) %>%
+  pivot_longer(cols = everything(), names_to = "Variable", values_to = "NA_Count")
+
+# Display summaries of NA values
+print("NA Summary for Training Set (train_sales_data):")
+print(na_summary_train)
+
+print("NA Summary for Test Set (test_sales_data):")
+print(na_summary_test)
+```
+
+After inspecting the datasets, **no explicit missing values (`NA`) are found in either the training or validation sets**, except for the `Sales` column in the test set. These `NA` values are expected and represent the absence of sales data for the test period, which aligns with the task requirements.
+
+## Handling Zero Values
+
+Zero values in certain columns may represent valid observations (e.g., no investment during a given week) or potential anomalies (e.g., zero web visits). To handle these appropriately:
+
+- **Investment-Related Variables**: Zeros are likely valid and represent weeks with no investment. These zeros are retained without modification.
+
+- **Potential Anomalies**: For variables like `web_visits`, zeros might indicate data inconsistencies.
+
+The following code computes zero counts for all columns in the training set:
+
+```{r}
+# Define investment-related variables
+investment_vars <- c(
+  "Affiliates_investment",
+  "Meta_investment",
+  "sea_brand",
+  "sea_other_investment",
+  "tiktok_investment",
+  "Database_investment",
+  "OOH_investment",
+  "TV_hbtv_investment",
+  "TV_investment",
+  "Radio_investment"
+)
+
+# Count zero values in training set
+zero_counts_train <- train_sales_data %>%
+  summarise(across(everything(), ~sum(. == 0, na.rm = TRUE))) %>%
+  pivot_longer(cols = everything(), names_to = "Variable", values_to = "ZeroCount") %>%
+  mutate(ZeroPercentage = ZeroCount / nrow(train_cv) * 100)
+
+# Display summaries of zero counts for training set
+print("Zero Counts in Training Set:")
+print(zero_counts_train)
+```
+
+We notice **the only variables with zeros correspond to investments**, so they are likely genuine values:
+
+- `tiktok_investment`, `TV_hbtv_investment`, and `Radio_investment` have zeros in approximately half of the rows. This reflects weeks with no TikTok, streaming TV or radio campaigns.
+- `TV_investment` has zeros in 13% of the rows.
+
+# Exploratory Data Analysis (EDA)
+
+The primary aim of this Exploratory Data Analysis (EDA) is to better understand the structure of the dataset, identify patterns, and evaluate the relationships between variables, particularly investment-related predictors and the target variable (sales). The insights gained in this phase will guide the subsequent feature engineering and predictive modeling steps.
+
+## Analysis of the Target
+
+The target variable, `Sales`, represents weekly sales figures. Understanding its distribution is critical because:
+
+- It determines how well the data aligns with assumptions required for regression-based models, such as linearity and normality of residuals.
+
+- It helps identify outliers and patterns (e.g., skewness, multimodality).
+
+This analysis is focused on the cross-validation training dataset (`train_cv`) because it will be used for model training. `Sales` values are not available in the test set, aligning with the task of making predictions.
+
+The following histogram visualizes the original distribution of `Sales`:
+
+```{r}
+# Original Sales Distribution in the Cross-Validation Training Dataset (train_cv)
+ggplot(train_cv, aes(x = Sales)) +
+  geom_histogram(fill = "blue", bins = 30, alpha = 0.7) +
+  labs(
+    title = "Sales Distribution in Training Dataset (train_cv)",
+    x = "Sales",
+    y = "Frequency"
+  )
+```
+
+We notice the following characteristics about this distribution:
+
+- **Bimodal Distribution**: Two clear peaks are visible: one around 2000 and another near 4000. This suggests that the dataset may contain distinct groups of weeks with low-sales and high-sales behaviors.
+
+- **Positive Skewness**: The right tail indicates the presence of weeks with significantly high sales, causing the distribution to be skewed. Such skewness may violate assumptions like homoscedasticity in regression models.
+
+- **Potential Outliers**: Weeks with exceptionally high sales can disproportionately influence linear regression models, resulting in biased predictions.
+
+Due to the skewness and outliers, the original sales values violate the assumptions of linear regression models. However, there should be no issue when using Machine Learning models such as Random Forest, since they have no homoscedasticity or normality assumptions.
+
+In order to apply linear regression models successfully, we will see if applying a **log transformation** improves the behaviour of the distribution:
+
+```{r}
+# Visualize Log-Transformed Sales Distribution for the Training Dataset
+ggplot(train_cv, aes(x = log(Sales + 1))) +
+  geom_histogram(fill = "green", bins = 30, alpha = 0.7) +
+  labs(
+    title = "Log-Transformed Sales Distribution (Training Dataset - train_cv)",
+    x = "Log(Sales)",
+    y = "Frequency"
+  )
+```
+
+We notice **the log-transformed distribution is less skewed**, although the bimodality persists. While not perfectly normal, the transformed data is closer to a bell-shaped curve.
+
+These observations of the target yields the following **implications for modeling**:
+
+- **Logarithmic Transformation of the Target With Linear Models:** We must predict the log-transformed sales when using linear regression. Therefore, we will use a formula like `log(Sales) ~ .`.
+- **Original Target With Machine Learning:** Since Machine Learning algorithms make no normality or homoscedasticity assumptions about the target, we can apply them with the original sales values directly. Therefore, we will use a formula like `Sales ~ .`.
+
+
+## Analysis of Investment Variables
+
+Investment-related features, such as spending on Meta, Affiliates, TikTok, and traditional media, are central to this project. The following steps were performed to evaluate their distributions and their relationships with Sales.
+
+### Distribution of Investment Features
+
+The histograms below display the distributions of key investment variables, grouped by online, offline, and traditional media investments. This analysis focuses on the training set as it forms the foundation for model training. The validation and test sets, while undergoing similar preprocessing, are excluded from visualization to prevent potential data leakage.
+
+```{r}
+# Plot distributions of investment variables in the training dataset
+train_cv %>%
+  select(all_of(investment_vars)) %>%
+  pivot_longer(cols = everything(), names_to = "Variable", values_to = "Value") %>%
+  ggplot(aes(x = Value)) +
+  geom_histogram(fill = "purple", bins = 30, alpha = 0.7) +
+  facet_wrap(~Variable, scales = "free") +
+  labs(
+    title = "Distributions of Investment Variables (Training Dataset - train_cv)",
+    x = "Investment Value",
+    y = "Frequency"
+  )
+```
+
+- **High Proportion of Zeros**: Variables such as `tiktok_investment`, `TV_hbtv_investment`, and `Radio_investment` contain a significant number of zeros, as evident from the histograms. As explained above, these zeros represent weeks with no investment in these channels, indicating meaningful observations rather than missing values.
+
+- **Skewed Distributions**: Some investment variables, including `Affiliates_investment` and `Database_investment`, exhibit right-skewed distributions. The variables with many zeros (`tiktok_investment`, `TV_hbtv_investment`, and `Radio_investment`) also have an extremely skewed distribution as a consequence of their high number of zeros.
+
+- **More Symmetric Distributions**: On the other hand, variables like `Meta_investment`,  `sea_brand`, `sea_other_investment`, `TV_investment`, and `OOH_investment` show relatively less skewed distributions and may not require transformation.
+
+These observations about the investment features yield the following **implications for modeling**:
+
+- **Zero Handling**: To capture patterns related to non-investment periods, zero-indicator columns should be included in the dataset for the `tiktok_investment`, `TV_hbtv_investment`, and `Radio_investment` columns. These additional columns will be 1 when the corresponding investment variable is 0, and they will be 0 otherwise.
+- **Original Distribution of Features**: Despite observing severe skewness in many distributions, this is not an issue with either linear or Machine Learning models. Linear models only assume symmetry in the target (the residuals), not the features. Logarithm transformations are only necessary if they help make the relationships more linear, which will be analyzed in the next section.
+
+
+###  Relationship Between Investments and Sales
+
+To better understand the impact of investments on sales, scatter plots are generated to examine the relationships between key investment variables and the target variable. This analysis is conducted on the training CV dataset to avoid introducing bias from the validation or test sets.
+
+```{r}
+# Original scale plots
+train_cv %>%
+ pivot_longer(cols = all_of(investment_vars), names_to = "Variable", values_to = "Value") %>%
+ ggplot(aes(x = Value, y = Sales)) +
+ geom_point(alpha = 0.5, color = "darkgreen") +
+ geom_smooth(method = "lm", formula = y ~ x, color = "red", se = TRUE) +
+ facet_wrap(~Variable, scales = "free") +
+ stat_cor(method = "pearson", 
+          label.x = 0.1, 
+          label.y = 0.9, 
+          size = 3,
+          color = "red",
+          label.sep = "\n") +  # Only show Pearson
+ labs(
+   title = "Investment Variables vs Sales (Training Dataset - train_cv)",
+   x = "Investment Value",
+   y = "Sales"
+ )
+```
+
+- **Positive Trends**: Higher investments in Meta, SEA, Radio and TV generally correspond to higher sales, confirming a positive relationship. For these values, there is a relatively high and positive Pearson correlation coefficient.
+
+- **Weak Relationships**: For investments in affiliate programs, database, OOH ads, or TikTok, the relationship is weaker and less consistent. In these cases, the correlation coefficient is very low.
+
+- **Non-Linear Relationships**: The scatter plots reveal diminishing returns: while low-to-moderate investments yield substantial increases in sales, the effect diminishes at higher investment levels.
+
+To improve results on linear models, we will see if relationships become more linear when applying a **logarithmic transformation on the target and features**:
+  
+```{r}
+# Generate scatter plots for all investment variables vs Log(Sales) in train_cv
+correlations_log <- train_cv %>%
+  pivot_longer(cols = all_of(investment_vars), names_to = "Variable", values_to = "Value") %>%
+  group_by(Variable) %>%
+  summarise(correlation = cor(log(Value + 1), log(Sales + 1), method = "pearson")) 
+train_cv %>%
+  pivot_longer(cols = all_of(investment_vars), names_to = "Variable", values_to = "Value") %>%
+  ggplot(aes(x = log(Value + 1), y = log(Sales + 1))) +
+  geom_point(alpha = 0.5, color = "darkgreen") +
+  geom_smooth(method = "lm", color = "red", formula = y ~ x, se = TRUE) +
+  geom_text(data = correlations_log,
+            aes(x = -Inf, y = Inf, 
+                label = sprintf("R = %.3f", correlation)),
+            hjust = -0.1,
+            vjust = 2,
+            color = "red",
+            size = 3) +
+  facet_wrap(~Variable, scales = "free") +
+  labs(
+    title = "log(Investment Variables) vs log(Sales) (Training Dataset - train_cv)",
+    x = "log(Investment Value + 1)",
+    y = "log(Sales + 1)"
+  )
+```
+
+We notice applying logarithmic transformations has the following effects:
+
+- **Investment in affiliate programs, SEA, and Meta**: When considering the log-transformed values, the relationship looks more linear and the correlation coefficient is higher.
+- **Investment in OOH and TikTok advertisement**: The log-transformed scatter plots confirm a weak correlation of these features with the target.
+- **TV and Radio investment**: Applying the logarithmic transformations did not consistently increase the correlation coefficient in these cases, although the relationships still look relatively linear.
+
+These observations about the relationships between the target and the investment features yield the following **implications for modeling**:
+
+- **Logarithmic Transformation of the Features With Linear Models:** Due to the linearity assumption of linear models, we must use the log-transformed features to strengthen linear relationships with the target. Therefore, we will use a formula like `log(Sales) ~ log(Meta_investment)`.
+- **Original Features With Machine Learning:** Since Machine Learning algorithms make no linearity assumptions, we can apply them with the original feature values directly. Therefore, we will use a formula like `Sales ~ Meta_investment`.
+
+## Analysis of the Stores Column
+
+The `Stores` column represents the total number of stores in operation. We will now compute summary statistics and plot its histogram to understand its distribution and range:
+
+
+```{r}
+# Compute summary statistics for the Stores column in train_cv
+stores_summary_train_cv <- train_cv %>%
+  summarise(
+    Min = min(Stores, na.rm = TRUE),
+    Max = max(Stores, na.rm = TRUE),
+    Mean = mean(Stores, na.rm = TRUE),
+    Median = median(Stores, na.rm = TRUE),
+    Unique_Count = n_distinct(Stores)
+  )
+
+print("Summary Statistics for Stores (Training Set - train_cv):")
+print(stores_summary_train_cv)
+
+# Visualize the distribution of Stores in train_cv
+ggplot(train_cv, aes(x = Stores)) +
+  geom_histogram(fill = "skyblue", bins = 10, alpha = 0.7) +
+  labs(
+    title = "Distribution of Stores (Training Set - train_cv)",
+    x = "Stores",
+    y = "Frequency"
+  )
+```
+
+
+We notice that, although `Stores` is count-based (discrete in theory), it behaves like a quasi-continuous variable for analysis purposes because it varies smoothly without abrupt jumps. Therefore, this column behaves like a **numerical and continuous variable**, so it can be used for correlation analysis and predictive modeling without transformation.
+
+## Correlation Analysis of Investment Features and Sales
+
+To assess the relationships between numerical features and `Sales`, the correlation matrix is computed for the training cross-validation set. This analysis provides insights into the strength and direction of associations between investment variables and sales performance.
+
+```{r}
+# Select all numerical variables, including Sales
+numerical_vars <- train_cv %>%
+  select(where(is.numeric), Sales)
+
+# Compute correlation matrix
+correlation_matrix <- cor(numerical_vars, use = "complete.obs")
+
+# Extract correlations with Sales
+corr_data <- as.data.frame(as.table(correlation_matrix)) %>%
+  filter(Var1 == "Sales" & Var2 != "Sales") %>%
+  arrange(desc(Freq))
+
+# Plot correlations
+ggplot(corr_data, aes(x = reorder(Var2, Freq), y = Freq)) +
+  geom_bar(stat = "identity", fill = "steelblue", alpha = 0.8) +
+  coord_flip() +
+  labs(
+    title = "Correlation Between Numerical Variables and Sales (Training Set - train_cv)",
+    x = "Variables",
+    y = "Correlation with Sales"
+  )
+```
+
+We notice sales are:
+
+- **Strongly correlated** with the brand's **positioning on Google** (`GBP`) and the number of **web visits** (`web_visits`).
+- **Strongly correlated** with the investment in **search engine advertising, TV and Meta**.
+- **Weakly correlated** with the investment in **radio, affiliate programs, TikTok, out-of-home advertising, or database**.
+
+These results with the investment features confirm our observations from the pairwise plots from earlier.
+
+## Time-Series Analysis of Sales
+
+To identify trends over time, `Sales` will be analyzed with respect to the `Monday_date` column. This analysis highlights potential seasonality, spikes, or patterns in the data.
+
+```{r}
+# Plot Sales over time with monthly x-axis breaks
+ggplot(train_cv, aes(x = Monday_date, y = Sales)) +
+  geom_line(color = "blue", linewidth = 0.8) +
+  scale_x_datetime(
+    date_breaks = "1 month",
+    date_labels = "%Y-%m"
+  ) +
+  labs(
+    title = "Sales Over Time (Training Dataset - train_cv)", 
+    x = "Date", 
+    y = "Sales"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    panel.grid.minor = element_blank()
+  )
+```
+
+We notice clear **cyclic patterns and seasonality** in sales:
+
+- Sales are **consistently lower** at the first week of December and January, matching **Christmas vacation**.
+- Sales are also **consistently lower** at one week in April, matching **Easter vacation** (Semana Santa).
+- Sales are **consistently higher** during **September**.
+
+These effects **explain the bimodality of the sales distribution** observed earlier in this section. Therefore, by adding features that explain these trends, we can both improve predictive power and address the bimodality issue.
+
+There is also **some correlation between current and past sales (self-correlation)**. If sales were high last week, they are more likely to be high this week, too.
+
+From these observations, we can guess the following aspects of the underlying business:
+
+- During vacation (Christmas and Easter), there is either no demand or stores are closed.
+- During September, demand is consistently higher, indicating the product sold may be related to school (e.g., notebooks or pencils).
+
+These observations about the sales have the following **implications for modeling**:
+
+- We should add **season indicator features** to help the models position themselves at each time of the year.
+- We should add **vacation flag features** to indicate whether we are on vacation.
+- We should add **past sales** as additional features to capture the self-correlation of this variable.
+
+These features will be added later during feature engineering.
+  
+## Time-Series Analysis of Investments
+
+We will now analyze each investment variable and the corresponding sales with respect to the `Monday_date` column.
+  
+```{r}
+# Plot each investment feature and the corresponding sales over time in train_cv
+train_cv %>%
+  pivot_longer(cols = all_of(investment_vars), 
+              names_to = "Variable", 
+              values_to = "Investment") %>%
+  group_by(Variable) %>%
+  mutate(
+    # Scale sales to match investment range for each variable
+    Scaled_Sales = Sales * max(Investment, na.rm = TRUE) / max(Sales, na.rm = TRUE)
+  ) %>%
+  ggplot() +
+  geom_line(aes(x = Monday_date, y = Investment, color = "Investment"), linewidth = 0.8) +
+  geom_line(aes(x = Monday_date, y = Scaled_Sales, color = "Sales"), linewidth = 0.8) +
+  scale_y_continuous(
+    name = "Investment Value",
+    sec.axis = sec_axis(~ . * max(train_cv$Sales, na.rm = TRUE) / 
+                         max(train_cv %>% 
+                             select(all_of(investment_vars)) %>% 
+                             unlist() %>% 
+                             max(na.rm = TRUE)),
+                       name = "Sales")
+  ) +
+  facet_wrap(~Variable, scales = "free_y", ncol = 3) +
+  scale_color_manual(values = c("Investment" = "blue", "Sales" = "red")) +
+  labs(title = "Investments and Sales Over Time (Training Dataset)",
+       x = "Date",
+       color = "Variable") +
+  theme_minimal() +
+  theme(
+    axis.title.y.right = element_text(color = "red"),
+    axis.title.y.left = element_text(color = "blue"),
+    legend.position = "bottom",
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    panel.grid.minor = element_blank()
+  )
+```
+
+These time-series plots reveal:
+
+- There is a **high correlation of current investment with past investment (self-correlation)**. If investment on a particular medium is high in one week, it is also likely to be high in the next.
+- There is **no clear connection between any individual investment and sales**. In cases like Meta and SEA, both investment and sales seem to follow the same trend during some periods. However, in most cases, the individual investment by itself is not enough to explain the sales.
+- There are **long periods where investment in TikTok or streaming TV ads is zero**, matching our previous observations on these features.
+
+To understand whether some features have a **lagged effect on sales**, we will make Cross-Correlation Function (CCF) Plots, which show the correlation between each investment and sales at different lag periods. The height of bars indicates strength of correlation and red dashed lines indicate the statistical significance threshold:
+
+```{r}
+# Function to compute cross-correlation analysis for positive lags only
+max_lag <- 12
+compute_ccf <- function(data, var_name) {
+  ccf_result <- ccf(data[[var_name]], data$Sales, 
+                    lag.max = max_lag, 
+                    plot = FALSE)
+  df <- data.frame(
+    lag = seq(0, max_lag),  # Only positive lags
+    correlation = ccf_result$acf[(max_lag + 1):(2 * max_lag + 1)]  # Corresponding correlations
+  )
+  
+  return(df)
+}
+
+# Calculate CCF for each investment variable
+investment_ccfs <- lapply(investment_vars, function(var) {
+  ccf_df <- compute_ccf(train_cv, var)
+  ccf_df$variable <- var
+  return(ccf_df)
+})
+
+# Combine all results
+all_ccfs <- do.call(rbind, investment_ccfs)
+
+# Create CCF plots
+ggplot(all_ccfs, aes(x = lag, y = correlation)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  geom_hline(yintercept = 2/sqrt(nrow(train_cv)), 
+             linetype = "dashed", color = "red") +
+  geom_hline(yintercept = -2/sqrt(nrow(train_cv)), 
+             linetype = "dashed", color = "red") +
+  facet_wrap(~variable, scales = "free_y", ncol = 3) +
+  labs(title = "Cross-Correlation Analysis of Investments and Sales",
+       subtitle = "Red dashed lines indicate significance threshold\nOnly showing positive lags (investment leading sales)",
+       x = "Lag (weeks)",
+       y = "Cross-correlation") +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 0),
+    panel.grid.minor = element_blank(),
+    strip.text = element_text(size = 8),
+    plot.title = element_text(size = 10),
+    plot.subtitle = element_text(size = 8)
+  ) +
+  scale_x_continuous(breaks = seq(0, max_lag, 2))  # Show even-numbered lags
+```
+
+As we can see:
+
+- **Most investments** have the **stronger effect at the current week (lag 0)**.
+- The effects of these investments at higher lags (lag 1, 2...) likely stem from their self-correlation (observed before) rather than any real inherent lag effect.
+- Other investments, particularly **search-engine advertisement (SEA) and streaming TV** (`sea_brand`, `sea_other_investment` and `TV_hbtv_investment`) also have **significant effects with lags 1 and 2**.
+- Some investments, including affiliate programs, database, out-of-home ads, and TikTok, have a stronger (negative) effect at later lags. However, these are likely artifacts resulting from the use of a small dataset that do not reflect any real behavior. 
+
+Based on this analysis, we will add the lags (lag 1 and lag 2) of **SEA and streaming TV investments** during feature engineering. However, the lags of other variables did not reveal a significant effect.
+
+## Analysis of Interaction Effects
+
+To identify potential **interaction effects between features**, we will compute the correlation of `Sales` with each interaction (product of two features). We will compare this correlation with those of each individual feature in order to see whether the interaction is actually useful.
+
+```{r}
+# Function to analyze interactions between all numerical variables
+analyze_variable_interactions <- function(data) {
+  # Get all numerical variables except Sales
+  numeric_vars <- names(data)[sapply(data, is.numeric)]
+  numeric_vars <- setdiff(numeric_vars, "Sales")
+  
+  # Create all possible pairs of variables
+  pairs <- combn(numeric_vars, 2, simplify = FALSE)
+  
+  # Calculate correlations for each interaction and individual variables
+  interaction_cors <- do.call(rbind, lapply(pairs, function(pair) {
+    var1 <- pair[1]
+    var2 <- pair[2]
+    
+    # Calculate correlations
+    interaction <- data[[var1]] * data[[var2]]
+    cor_interaction <- cor(interaction, data$Sales, use = "complete.obs")
+    cor_var1 <- cor(data[[var1]], data$Sales, use = "complete.obs")
+    cor_var2 <- cor(data[[var2]], data$Sales, use = "complete.obs")
+    
+    # Return correlation info
+    data.frame(
+      var1 = var1,
+      var2 = var2,
+      cor_interaction = cor_interaction,
+      cor_var1 = cor_var1,
+      cor_var2 = cor_var2,
+      abs_cor_interaction = abs(cor_interaction),
+      # Calculate if interaction provides additional value
+      improvement = abs(cor_interaction) - max(abs(cor_var1), abs(cor_var2))
+    )
+  }))
+  
+  # Sort by improvement in correlation and get top interactions
+  top_interactions <- interaction_cors %>%
+    arrange(desc(improvement)) %>%
+    head(10)
+  
+  # Prepare data for plotting
+  plot_data <- top_interactions %>%
+    mutate(
+      interaction_name = paste(var1, "*", var2),
+      var1_name = paste("Variable 1:", var1),
+      var2_name = paste("Variable 2:", var2)
+    ) %>%
+    select(interaction_name, var1_name, var2_name, cor_interaction, cor_var1, cor_var2) %>%
+    tidyr::pivot_longer(
+      cols = c(cor_interaction, cor_var1, cor_var2),
+      names_to = "correlation_type",
+      values_to = "correlation"
+    ) %>%
+    mutate(
+      correlation_type = case_when(
+        correlation_type == "cor_interaction" ~ "Interaction",
+        correlation_type == "cor_var1" ~ "Variable 1",
+        correlation_type == "cor_var2" ~ "Variable 2"
+      )
+    )
+  
+  # Create visualization
+  interaction_plot <- ggplot(plot_data, 
+         aes(x = reorder(interaction_name, correlation * (correlation_type == "Interaction")), 
+             y = correlation,
+             fill = correlation_type)) +
+    geom_bar(stat = "identity", position = "dodge") +
+    coord_flip() +
+    scale_fill_manual(values = c("steelblue", "lightgreen", "lightblue")) +
+    labs(
+      title = "Top 10 Variable Interactions by Improvement over Individual Effects",
+      subtitle = "Shows correlation with sales for interaction and individual variables",
+      x = "Interaction",
+      y = "Correlation with Sales",
+      fill = "Type"
+    ) +
+    theme_minimal() +
+    theme(
+      legend.position = "bottom",
+      plot.title = element_text(size = 11),
+      plot.subtitle = element_text(size = 9)
+    )
+  
+  # Return both data and plot
+  list(
+    top_interactions = top_interactions %>% 
+      arrange(desc(abs_cor_interaction)) %>%
+      select(var1, var2, cor_interaction, cor_var1, cor_var2, improvement),
+    plot = interaction_plot,
+    plot_data = plot_data
+  )
+}
+results <- analyze_variable_interactions(train_cv)
+print(results$top_interactions)
+print(results$plot)
+```
+
+We can see the following variables have noticeable interaction effects:
+
+- The **number of open stores** (`Stores`) has an interaction effect with the company's positioning on Google (`GBP`), SEA investment (`sea_brand`, `sea_other_investment`), investment in TV ads (`TV_hbtv_investment`, `TV_investment`), and investment in Facebook/Instagram ads (`Meta_investment`). 
+- The **investment in affiliate programs** (`Affiliates_investment`) has an interaction effect with the investment in radio (`Radio_investment`), out-of-home ads (`OOH_investment`), and TikTok (`tiktok_investment`).
+
+Each of these interactions often has a **stronger effect than each of the individual features that forms it**, indicating that considering the interaction will be useful for predictive performance.
+
+## Summary of EDA and Key Insights for Feature Engineering
+
+Based on the Exploratory Data Analysis, here are the most critical insights and corresponding feature engineering recommendations:
+
+Key insights:
+
+- Several investment features (TikTok, TV streaming, Radio) contain 40-50% zeros.
+- Sales show a bimodal distribution and strong seasonality (Christmas, Easter, September).
+- Meta, SEA, and TV investments strongly correlate with sales, while TikTok, OOH, and affiliate investments show weak correlation.
+- The logarithmic transformation makes the target more symmetrical and makes relationship more linear (higher Pearson correlation coefficient).
+- The SEA and streaming TV investments have lagged effects over one and two weeks, while the other variables have a significant impact only on the current week.
+- There are significant interaction effects with the number of open stores and the investment in affiliate programs.
+
+**Feature engineering** recommendations:
+
+- Create **binary zero-indicator variables** for investment features with many zeros.
+- Add **seasonal indicators** and **vacation flags** to capture cyclical sales patterns.
+- Add **lagged features** for SEA and streaming TV investments to capture the observed lagged effects.
+
+**Model definition** recommendations:
+
+- Add **interaction effects** between the number of open stores and several investments, as well as interactions between the investment in affiliate programs and other investments.
+- *For linear models*: apply **log transformation** to both sales and investment features, `log(Sales) ~ log(features)`.
+- *For machine learning models*: use the **original target and features**, `Sales ~ features`.
+
+# Feature Engineering
+
+## Zero Indicator Columns
+
+In the Exploratory Data Analysis (EDA), we identified a significant number of zeros in these variables: `tiktok_investment`, `TV_hbtv_investment`, and `Radio_investment`.
+
+For each of these variables, we will create a new column (`*_is_zero`) such that the column:
+
+- Contains `1` if the variable is `0`.
+- Contains `0` otherwise.
+
+These indicator columns help the model capture patterns associated with periods of zero investment, potentially improving predictive performance.
+
+```{r}
+# Function to add zero indicator columns
+add_zero_indicators <- function(data) {
+  # Variables identified with significant zeros from EDA
+  zero_heavy_vars <- c("tiktok_investment", "TV_hbtv_investment", "Radio_investment")
+  
+  # Create indicator columns for each variable
+  for (var in zero_heavy_vars) {
+    indicator_name <- paste0(var, "_is_zero")
+    data[[indicator_name]] <- as.numeric(data[[var]] == 0)
+  }
+  
+  return(data)
+}
+
+# Apply to all datasets
+train_cv <- add_zero_indicators(train_cv)
+val_cv <- add_zero_indicators(val_cv)
+test_sales_data <- add_zero_indicators(test_sales_data)
+
+glimpse(train_cv)
+glimpse(val_cv)
+glimpse(test_sales_data)
+```
+
+
+## Seasonal Indicators
+
+Based on our observations of the sales time series, we will add **seasonal indicators** to help capture the observed time-dependent patterns in the data:
+
+- **Annual Cycle Indicators (365.25 days)**: These capture yearly patterns, like Christmas sales or summer trends. One full cycle completes every year.
+
+  - seasonal_annual_sin = $\sin(\frac{2\pi \cdot \text{day}}{365.25})$
+  - seasonal_annual_cos = $\cos(\frac{2\pi \cdot \text{day}}{365.25})$
+
+
+- **Semi-annual Cycle Indicators (182.625 days)**: These complete two cycles per year, helping capture patterns that repeat twice yearly, like spring/fall transitions.
+
+  - seasonal_semiannual_sin = $\sin(\frac{4\pi \cdot \text{day}}{365.25})$
+  - seasonal_semiannual_cos = $\cos(\frac{4\pi \cdot \text{day}}{365.25})$
+
+- **Quarterly Cycle Indicators (91.3125 days)**: These complete four cycles per year, useful for capturing seasonal patterns within each quarter.
+
+  - seasonal_quarterly_sin = $\sin(\frac{8\pi \cdot \text{day}}{365.25})$
+  - seasonal_quarterly_cos = $\cos(\frac{8\pi \cdot \text{day}}{365.25})$
+
+- **Monthly Cycle Indicators (30.4375 days)**: These complete twelve cycles per year, capturing patterns that repeat monthly.
+
+  - seasonal_monthly_sin = $\sin(\frac{24\pi \cdot \text{day}}{365.25})$
+  - seasonal_monthly_cos = $\cos(\frac{24\pi \cdot \text{day}}{365.25})$
+
+In each case, using both sine and cosine will allow our models to capture patterns regardless of when they start in the cycle. 
+
+```{r}
+# Function to add seasonal indicators
+add_seasonal_indicators <- function(data) {
+  # Convert dates to numeric (days since epoch)
+  data <- data %>%
+    mutate(
+      # Get day of year (1-366)
+      day_of_year = as.numeric(format(Monday_date, "%j")),
+      
+      # Create seasonal features with different frequencies
+      # Annual cycle (365.25 days)
+      seasonal_annual_sin = sin(2 * pi * day_of_year / 365.25),
+      seasonal_annual_cos = cos(2 * pi * day_of_year / 365.25),
+      
+      # Semi-annual cycle (182.625 days)
+      seasonal_semiannual_sin = sin(4 * pi * day_of_year / 365.25),
+      seasonal_semiannual_cos = cos(4 * pi * day_of_year / 365.25),
+      
+      # Quarterly cycle (91.3125 days)
+      seasonal_quarterly_sin = sin(8 * pi * day_of_year / 365.25),
+      seasonal_quarterly_cos = cos(8 * pi * day_of_year / 365.25),
+      
+      # Monthly cycle (30.4375 days)
+      seasonal_monthly_sin = sin(24 * pi * day_of_year / 365.25),
+      seasonal_monthly_cos = cos(24 * pi * day_of_year / 365.25)
+    ) %>%
+    select(-day_of_year)  # Remove temporary column
+  
+  return(data)
+}
+
+# Apply to all datasets
+train_cv <- add_seasonal_indicators(train_cv)
+val_cv <- add_seasonal_indicators(val_cv)
+test_sales_data <- add_seasonal_indicators(test_sales_data)
+
+# Create visualization comparing sales with seasonal indicators
+# First, scale all variables to be comparable
+train_cv_plot <- train_cv %>%
+  select(Monday_date, Sales, starts_with("seasonal")) %>%
+  mutate(across(c(Sales, starts_with("seasonal")), 
+                ~scale(.) %>% as.vector(),
+                .names = "{.col}_scaled"))
+
+# Create the plot
+seasonal_plot <- ggplot(train_cv_plot) +
+  # Base layer with sales
+  geom_line(aes(x = Monday_date, y = Sales_scaled, color = "Sales"), 
+            linewidth = 1) +
+  
+  # Add annual cycle
+  geom_line(aes(x = Monday_date, y = seasonal_annual_sin_scaled, 
+                color = "Annual Sin"), alpha = 0.7) +
+  geom_line(aes(x = Monday_date, y = seasonal_annual_cos_scaled, 
+                color = "Annual Cos"), alpha = 0.7) +
+  
+  # Add semi-annual cycle
+  geom_line(aes(x = Monday_date, y = seasonal_semiannual_sin_scaled, 
+                color = "Semi-annual Sin"), alpha = 0.7) +
+  geom_line(aes(x = Monday_date, y = seasonal_semiannual_cos_scaled, 
+                color = "Semi-annual Cos"), alpha = 0.7) +
+  
+  # Add quarterly cycle
+  geom_line(aes(x = Monday_date, y = seasonal_quarterly_sin_scaled, 
+                color = "Quarterly Sin"), alpha = 0.7) +
+  geom_line(aes(x = Monday_date, y = seasonal_quarterly_cos_scaled, 
+                color = "Quarterly Cos"), alpha = 0.7) +
+  
+  # Add monthly cycle
+  geom_line(aes(x = Monday_date, y = seasonal_monthly_sin_scaled, 
+                color = "Monthly Sin"), alpha = 0.7) +
+  geom_line(aes(x = Monday_date, y = seasonal_monthly_cos_scaled, 
+                color = "Monthly Cos"), alpha = 0.7) +
+  
+  # Customize the plot
+  scale_x_datetime(date_breaks = "1 month", date_labels = "%Y-%m") +
+  scale_color_manual(values = c(
+    "Sales" = "black",
+    "Annual Sin" = "#E41A1C",
+    "Annual Cos" = "#377EB8",
+    "Semi-annual Sin" = "#4DAF4A",
+    "Semi-annual Cos" = "#984EA3",
+    "Quarterly Sin" = "#FF7F00",
+    "Quarterly Cos" = "#FFFF33",
+    "Monthly Sin" = "#A65628",
+    "Monthly Cos" = "#F781BF"
+  )) +
+  labs(
+    title = "Sales and Seasonal Indicators Over Time",
+    subtitle = "All variables are scaled for comparison",
+    x = "Date",
+    y = "Scaled Value",
+    color = "Variable"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "right",
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(size = 12),
+    plot.subtitle = element_text(size = 10)
+  )
+
+# Display the plot
+print(seasonal_plot)
+```
+
+We will check the usefulness of these new features by **plotting their correlation with sales and assessing their significance**:
+
+```{r}
+# Print summary of correlations between sales and seasonal indicators
+correlations <- cor(train_cv %>% 
+                     select(Sales, starts_with("seasonal"))) %>%
+  as.data.frame() %>%
+  select(Sales) %>%
+  arrange(desc(abs(Sales))) %>%
+  filter(row.names(.) != "Sales")
+
+# Calculate correlations and significance
+correlation_data <- data.frame(
+  feature = character(),
+  correlation = numeric(),
+  p_value = numeric()
+)
+
+for (col in names(train_cv)[startsWith(names(train_cv), "seasonal")]) {
+  cor_test <- cor.test(train_cv$Sales, train_cv[[col]])
+  correlation_data <- rbind(correlation_data, data.frame(
+    feature = col,
+    correlation = cor_test$estimate,
+    p_value = cor_test$p.value
+  ))
+}
+
+# Create significance labels
+correlation_data <- correlation_data %>%
+  mutate(
+    significance = case_when(
+      p_value < 0.001 ~ "***",
+      p_value < 0.01 ~ "**",
+      p_value < 0.05 ~ "*",
+      TRUE ~ "ns"
+    ),
+    feature = gsub("seasonal_", "", feature)  # Clean feature names
+  )
+
+# Create bar plot
+correlation_plot <- ggplot(correlation_data, 
+       aes(x = reorder(feature, abs(correlation)), y = correlation)) +
+  geom_bar(stat = "identity", fill = "steelblue", 
+           aes(alpha = abs(correlation))) +
+  geom_text(aes(label = significance, y = correlation + 
+                sign(correlation) * 0.05), 
+            size = 4) +
+  coord_flip() +
+  labs(
+    title = "Correlations between Sales and Seasonal Indicators",
+    subtitle = "Significance levels: *** p<0.001, ** p<0.01, * p<0.05, ns: not significant",
+    x = "Seasonal Indicator",
+    y = "Correlation with Sales"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "none",
+    axis.text = element_text(size = 10),
+    plot.title = element_text(size = 12),
+    plot.subtitle = element_text(size = 9)
+  ) +
+  scale_y_continuous(limits = c(-1, 1))
+
+# Print correlation plot
+print(correlation_plot)
+```
+
+As we can see, **half of the variables have a noticeable and significant correlation**, with the absolute correlation higher than 0.2 (noticeable) and the p-value below 0.05 (significant).
+
+## Vacation Flags
+
+Given our observations on how much sales drop during vacation, we will add two binary indicators:
+
+- `is_christmas_vacation`: Set to 1 for December 25th to January 8th (typical Christmas vacation).
+- `is_easter_vacation`: Set to 1 for Holy Week (Semana Santa, the week before Easter Sunday). We will use the Meeus/Jones/Butcher algorithm to calculate Easter Sunday for each year (since it's a moving holiday). However, we will exclude 2024-03-25 from Eastern period since the sales at this date do not follow the expected trend.
+
+```{r}
+# Function to add vacation flags
+add_vacation_flags <- function(data) {
+  data <- data %>%
+    mutate(
+      # Extract month and day for easier comparison
+      month = as.numeric(format(Monday_date, "%m")),
+      day = as.numeric(format(Monday_date, "%d")),
+      
+      # Christmas vacation flag (typically December 25 - January 8 in Spain)
+      is_christmas_vacation = case_when(
+        (month == 12 & day >= 25) | (month == 1 & day <= 8) ~ 1,
+        TRUE ~ 0
+      ),
+      
+      # Easter vacation flag (Semana Santa)
+      # Since Easter is a moving holiday, we need to calculate it for each year
+      year = as.numeric(format(Monday_date, "%Y"))
+    )
+  
+  # Function to get Easter Sunday date
+  # Meeus/Jones/Butcher algorithm
+  get_easter_sunday <- function(year) {
+    a <- year %% 19
+    b <- floor(year / 100)
+    c <- year %% 100
+    d <- floor(b / 4)
+    e <- b %% 4
+    f <- floor((b + 8) / 25)
+    g <- floor((b - f + 1) / 3)
+    h <- (19 * a + b - d - g + 15) %% 30
+    i <- floor(c / 4)
+    k <- c %% 4
+    l <- (32 + 2 * e + 2 * i - h - k) %% 7
+    m <- floor((a + 11 * h + 22 * l) / 451)
+    month <- floor((h + l - 7 * m + 114) / 31)
+    day <- ((h + l - 7 * m + 114) %% 31) + 1
+    return(as.Date(sprintf("%d-%02d-%02d", year, month, day)))
+  }
+  
+  # Get unique years in the dataset
+  years <- unique(data$year)
+  
+  # Create Easter dates lookup
+  easter_dates <- sapply(years, get_easter_sunday)
+  names(easter_dates) <- years
+  
+  # Add Easter vacation flag (typically the week before Easter Sunday in Spain)
+  data <- data %>%
+    rowwise() %>%
+    mutate(
+      easter_sunday = as.Date(easter_dates[as.character(year)]),
+      easter_week_start = easter_sunday - 7,
+      # Check if Monday_date falls within Easter week, excluding March 25, 2024
+      is_easter_vacation = case_when(
+        as.Date(Monday_date) == as.Date("2024-03-25") ~ 0,  # Exclude specific date
+        as.Date(Monday_date) >= easter_week_start & 
+        as.Date(Monday_date) <= easter_sunday ~ 1,
+        TRUE ~ 0
+      )
+    ) %>%
+    ungroup() %>%
+    select(-month, -day, -year, -easter_sunday, -easter_week_start)
+  
+  return(data)
+}
+
+# Apply to all datasets
+train_cv <- add_vacation_flags(train_cv)
+val_cv <- add_vacation_flags(val_cv)
+test_sales_data <- add_vacation_flags(test_sales_data)
+
+# Visualize the impact of vacation flags on sales
+train_cv_vacation <- train_cv %>%
+  mutate(vacation_status = case_when(
+    is_christmas_vacation == 1 ~ "Christmas Vacation",
+    is_easter_vacation == 1 ~ "Easter Vacation",
+    TRUE ~ "Regular Period"
+  ))
+vacation_plot <- ggplot(train_cv_vacation, aes(x = Monday_date)) +
+  # Plot sales line
+  geom_line(aes(y = scale(Sales)), color = "gray50", linewidth = 0.6, alpha = 0.7) +
+  
+  # Add points for each observation, colored by vacation status
+  geom_point(aes(y = scale(Sales), color = vacation_status), size = 3) +
+  
+  # Add shaded regions for vacations
+  geom_rect(data = train_cv %>% filter(is_christmas_vacation == 1),
+            aes(xmin = Monday_date, 
+                xmax = Monday_date + days(6),
+                ymin = -Inf, 
+                ymax = Inf,
+                fill = "Christmas Vacation"),
+            alpha = 0.2) +
+  
+  geom_rect(data = train_cv %>% filter(is_easter_vacation == 1),
+            aes(xmin = Monday_date, 
+                xmax = Monday_date + days(6),
+                ymin = -Inf, 
+                ymax = Inf,
+                fill = "Easter Vacation"),
+            alpha = 0.2) +
+  
+  scale_x_datetime(date_breaks = "1 month", 
+                  date_labels = "%Y-%m") +
+  scale_color_manual(values = c(
+    "Regular Period" = "blue",
+    "Christmas Vacation" = "red",
+    "Easter Vacation" = "purple"
+  )) +
+  scale_fill_manual(values = c(
+    "Christmas Vacation" = "red",
+    "Easter Vacation" = "purple"
+  )) +
+  labs(
+    title = "Sales and Vacation Periods",
+    subtitle = "Points colored by vacation status: red for Christmas, purple for Easter, blue for regular periods",
+    x = "Date",
+    y = "Scaled Sales",
+    color = "Period Type",
+    fill = "Vacation Shading"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    panel.grid.minor = element_blank(),
+    legend.box = "vertical"
+  ) +
+  guides(
+    color = guide_legend(order = 1),
+    fill = guide_legend(order = 2)
+  )
+print(vacation_plot)
+```
+
+As we can see in the graph, **these vacation flags help explain the noticeable drops in sales**. We can check this with the following summary statistics:
+
+```{r}
+# Print summary statistics
+cat("\nSummary of vacation periods in training set:\n")
+train_cv %>%
+  summarise(
+    total_weeks = n(),
+    christmas_weeks = sum(is_christmas_vacation),
+    easter_weeks = sum(is_easter_vacation),
+    pct_christmas = mean(is_christmas_vacation) * 100,
+    pct_easter = mean(is_easter_vacation) * 100
+  ) %>%
+  print()
+
+# Calculate average sales during vacation vs non-vacation periods
+cat("\nAverage sales by period type:\n")
+train_cv %>%
+  mutate(
+    period_type = case_when(
+      is_christmas_vacation == 1 ~ "Christmas Vacation",
+      is_easter_vacation == 1 ~ "Easter Vacation",
+      TRUE ~ "Normal Period"
+    )
+  ) %>%
+  group_by(period_type) %>%
+  summarise(
+    avg_sales = mean(Sales),
+    std_sales = sd(Sales),
+    n_weeks = n()
+  ) %>%
+  print()
+```
+
+As we can see, adding these features will not only improve predictive performance, but also **address the bimodality previously observed with sales**, with one small peak around 2000 (corresponding to vacation) and another peak around 4000 (corresponding to normal periods).
+
+## Lagged Features
+
+In our Exploratory Data Analysis, we have observed that the following variables have a lagged effect on sales: `sea_brand`, `sea_other_investment`, and `TV_hbtv_investment`. When lagged 1 or 2 weeks, the lags of these features showed significant correlations with the target.
+
+To include these features without introducing unnecessary NAs, we will add them to the full dataset and then copy the corresponding columns to the training CV, validation and testing sets.
+
+```{r}
+# Variables identified with significant lag effects from EDA
+lag_vars <- c("sea_brand", "sea_other_investment", "TV_hbtv_investment")
+
+# Function to add lagged features
+add_lagged_features <- function(data) {
+  
+  # Ensure data is ordered by date before creating lags
+  data <- data %>%
+    arrange(Monday_date)
+  
+  # Add lag 1 and lag 2 for each variable
+  for (var in lag_vars) {
+    # Create column names for lags
+    lag1_name <- paste0(var, "_lag1")
+    lag2_name <- paste0(var, "_lag2")
+    
+    # Add lagged columns
+    data <- data %>%
+      mutate(
+        !!lag1_name := lag(!!sym(var), 1),
+        !!lag2_name := lag(!!sym(var), 2)
+      )
+  }
+  
+  return(data)
+}
+
+# First apply to complete dataset
+sales_data_with_lags <- add_lagged_features(sales_data)
+
+# Replace NAs with zeros only at the beginning (first 2 rows of full dataset)
+sales_data_with_lags <- sales_data_with_lags %>%
+  mutate(across(ends_with(c("_lag1", "_lag2")), ~replace_na(., 0)))
+
+# Now split the data maintaining the lagged columns
+# Get the lagged column names
+lag_cols <- names(sales_data_with_lags)[grep("_lag[12]$", names(sales_data_with_lags))]
+
+# Add lagged columns to each dataset
+train_cv <- train_cv %>%
+  left_join(sales_data_with_lags %>% 
+              select(Monday_date, all_of(lag_cols)),
+            by = "Monday_date")
+
+val_cv <- val_cv %>%
+  left_join(sales_data_with_lags %>% 
+              select(Monday_date, all_of(lag_cols)),
+            by = "Monday_date")
+
+test_sales_data <- test_sales_data %>%
+  left_join(sales_data_with_lags %>% 
+              select(Monday_date, all_of(lag_cols)),
+            by = "Monday_date")
+
+# Create visualization of original and lagged features across all periods
+example_var <- "sea_brand"
+
+lag_plot <- sales_data_with_lags %>%
+  select(Monday_date, 
+         !!example_var,
+         paste0(example_var, "_lag1"),
+         paste0(example_var, "_lag2")) %>%
+  pivot_longer(cols = -Monday_date,
+               names_to = "variable",
+               values_to = "value") %>%
+  mutate(
+    variable = factor(variable,
+                     levels = c(example_var,
+                              paste0(example_var, "_lag1"),
+                              paste0(example_var, "_lag2")),
+                     labels = c("Original", "Lag 1", "Lag 2")),
+    # Add period information for visualization
+    period = case_when(
+      Monday_date <= max(train_cv$Monday_date) ~ "Training",
+      Monday_date <= max(val_cv$Monday_date) ~ "Validation",
+      TRUE ~ "Test"
+    )
+  ) %>%
+  ggplot(aes(x = Monday_date, y = value, color = variable)) +
+  geom_line(linewidth = 1) +
+  geom_vline(xintercept = as.numeric(max(train_cv$Monday_date)),
+             linetype = "dashed", color = "gray") +
+  geom_vline(xintercept = as.numeric(max(val_cv$Monday_date)),
+             linetype = "dashed", color = "gray") +
+  annotate("text", 
+           x = c(mean(train_cv$Monday_date),
+                 mean(c(max(train_cv$Monday_date), max(val_cv$Monday_date))),
+                 mean(c(max(val_cv$Monday_date), max(test_sales_data$Monday_date)))),
+           y = max(sales_data_with_lags[[example_var]]),
+           label = c("Training", "Validation", "Test"),
+           color = "gray40") +
+  scale_color_manual(values = c("Original" = "blue",
+                               "Lag 1" = "red",
+                               "Lag 2" = "green")) +
+  labs(
+    title = "Example of Lagged Features Across All Periods",
+    subtitle = paste("Showing", example_var, "and its lags"),
+    x = "Date",
+    y = "Value",
+    color = "Version"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+
+# Display the plot
+print(lag_plot)
+```
+
+
+## Summary of Feature Engineering
+
+In the feature engineering section, we have added the following features:
+
+- **Zero Indicators**: Created binary flags for features with frequent zeros (TikTok, streaming TV, and radio investments). Each flag is 1 when investment is 0, and 0 otherwise.
+- **Seasonal Features**: Added sine and cosine components for different cycles (annual, semi-annual, quarterly and monthly).
+- **Vacation Flags**: Added two binary indicators, one for Christmas vacation (Dec 23 - Jan 7) and another for Easter vacation (Holy Week). These features help explain significant sales drops during these periods.
+- **Lagged Features**: Created 1-week and 2-week lags for SEA branded and streaming TV investment, based on observed delayed effects in correlation analysis.
+
+These new features address the bimodal distribution of sales and capture important temporal patterns in the data.
+
+# Model Formula Definition
+
+Based on our Exploratory Data Analysis (EDA) and feature engineering, we now define **two distinct model formulas**:
+
+- One for **linear models** (including Elastic Net).
+- Another for **machine learning approaches** (Random Forest, XGBoost).
+
+The key distinction lies in the transformation of variables: linear models require log transformations to meet linearity assumptions and handle skewed distributions, while machine learning models can work with the original scales.
+
+Both formulas will incorporate:
+
+- The **zero indicators, seasonality features, vacations flags, and lagged investments** introduced during feature engineering.
+- The **interaction effects** that were found to be significant during EDA:
+
+  - `Stores` with `GBP`, `sea_brand`, `sea_other_investment`, `TV_hbtv_investment`, `TV_investment` and `Meta_investment`.
+  - `Affiliates_investment` with `Radio_investment`, `OOH_investment`, and `tiktok_investment`.
+  
+We will define three additional formulas that **exclude some features** for the Machine Learning models because, unlike the linear models we will try, they have no inherent feature selection:
+
+- `formula_ml_no_seasonal`: exclude the seasonal indicators.
+- `formula_ml_no_vacation`: exclude the vacation flags.
+
+```{r}
+# Define variables that should be log-transformed for linear models
+log_vars <- c(
+  "Affiliates_investment",
+  "Meta_investment",
+  "sea_brand",
+  "sea_other_investment",
+  "tiktok_investment",
+  "Database_investment",
+  "OOH_investment",
+  "TV_hbtv_investment",
+  "TV_investment",
+  "Radio_investment",
+  # Not investment features (but similar scale)
+  "GBP",
+  "web_visits",
+  # Lagged features (already defined with lag suffix)
+  "sea_brand_lag1",
+  "sea_brand_lag2",
+  "sea_other_investment_lag1",
+  "sea_other_investment_lag2",
+  "TV_hbtv_investment_lag1",
+  "TV_hbtv_investment_lag2"
+)
+
+# Define variables that should not be log-transformed
+# These include: stores, zero indicators, vacation indicators
+non_log_vars_base <- c(
+  "Stores",
+  # Zero indicators
+  "tiktok_investment_is_zero",
+  "TV_hbtv_investment_is_zero",
+  "Radio_investment_is_zero"
+)
+
+# Seasonal indicators
+seasonal_vars <- c(
+  "seasonal_annual_sin",
+  "seasonal_annual_cos",
+  "seasonal_semiannual_sin",
+  "seasonal_semiannual_cos",
+  "seasonal_quarterly_sin",
+  "seasonal_quarterly_cos",
+  "seasonal_monthly_sin",
+  "seasonal_monthly_cos"
+)
+
+# Vacation indicators
+vacation_vars <- c(
+  "is_christmas_vacation",
+  "is_easter_vacation"
+)
+
+# Combine all non-log variables for linear formula
+non_log_vars <- c(non_log_vars_base, seasonal_vars, vacation_vars)
+
+# Create interaction terms for stores
+stores_interactions <- c(
+  "Stores:GBP",
+  "Stores:sea_brand",
+  "Stores:sea_other_investment",
+  "Stores:TV_hbtv_investment",
+  "Stores:TV_investment",
+  "Stores:Meta_investment"
+)
+
+# Create interaction terms for affiliates
+affiliates_interactions <- c(
+  "Affiliates_investment:Radio_investment",
+  "Affiliates_investment:OOH_investment",
+  "Affiliates_investment:tiktok_investment"
+)
+
+# Linear model formula with log transformations
+formula_linear <- as.formula(paste(
+  "log(Sales) ~",
+  # Add log-transformed investment variables
+  paste(paste0("log(", log_vars, " + 1)"), collapse = " + "),
+  "+",
+  # Add non-transformed variables
+  paste(non_log_vars, collapse = " + "),
+  "+",
+  # Add interactions (with log transformations for investment variables)
+  paste("Stores:log(GBP + 1)", 
+        "Stores:log(sea_brand + 1)",
+        "Stores:log(sea_other_investment + 1)",
+        "Stores:log(TV_hbtv_investment + 1)",
+        "Stores:log(TV_investment + 1)",
+        "Stores:log(Meta_investment + 1)",
+        "log(Affiliates_investment + 1):log(Radio_investment + 1)",
+        "log(Affiliates_investment + 1):log(OOH_investment + 1)",
+        "log(Affiliates_investment + 1):log(tiktok_investment + 1)",
+        sep = " + ")
+))
+
+# Original ML formula (with all variables)
+formula_ml <- as.formula(paste(
+  "Sales ~",
+  # Add all investment variables (no transformation)
+  paste(log_vars, collapse = " + "),
+  "+",
+  # Add all other variables
+  paste(c(non_log_vars_base, seasonal_vars, vacation_vars), collapse = " + "),
+  "+",
+  # Add interactions (no transformations)
+  paste(stores_interactions, collapse = " + "),
+  "+",
+  paste(affiliates_interactions, collapse = " + ")
+))
+
+# ML formula without seasonality indicators
+formula_ml_no_seasonal <- as.formula(paste(
+  "Sales ~",
+  # Add all investment variables (no transformation)
+  paste(log_vars, collapse = " + "),
+  "+",
+  # Add base variables and vacation indicators (no seasonality)
+  paste(c(non_log_vars_base, vacation_vars), collapse = " + "),
+  "+",
+  # Add interactions (no transformations)
+  paste(stores_interactions, collapse = " + "),
+  "+",
+  paste(affiliates_interactions, collapse = " + ")
+))
+
+# ML formula without vacation indicators
+formula_ml_no_vacation <- as.formula(paste(
+  "Sales ~",
+  # Add all investment variables (no transformation)
+  paste(log_vars, collapse = " + "),
+  "+",
+  # Add all other variables
+  paste(c(non_log_vars_base, seasonal_vars), collapse = " + "),
+  "+",
+  # Add interactions (no transformations)
+  paste(stores_interactions, collapse = " + "),
+  "+",
+  paste(affiliates_interactions, collapse = " + ")
+))
+
+# Print all formulas
+cat("Linear Model Formula:\n")
+print(formula_linear)
+
+cat("\nOriginal ML Formula:\n")
+print(formula_ml)
+
+cat("\nML Formula without Seasonality:\n")
+print(formula_ml_no_seasonal)
+
+cat("\nML Formula without Vacation:\n")
+print(formula_ml_no_vacation)
+```
+
+
+# Model Training and Evaluation
+
+## Introduction
+
+In this section, advanced regression and machine learning models are developed to predict sales. The datasets are organized as follows:
+
+- `train_cv`: Used for training and validating the models through cross-validation techniques.
+
+- `val_cv`: Dedicated to evaluating model performance on unseen data before applying the model to the final test dataset.
+
+- `test_sales_data`: Exclusively used for generating final predictions and assessing the model's performance on fully independent data.
+
+The primary objective is to minimize the **Mean Absolute Error (MAE)**, ensuring accurate predictions while balancing model interpretability and robustness. Additionally, this analysis aims to identify key drivers of sales, particularly among investment-related variables, to support strategic decision-making and resource allocation.
+
+## Model Selection Workflow
+
+In this study, we aim to achieve optimal predictive performance by evaluating a range of machine learning models.
+
+The **models** considered include:
+
+- **Linear Regression Models**, trained to fit the formula `formula_linear` defined earlier:
+  
+  - **Elastic Net**: Balances feature selection (Lasso regression) and coefficient regularization (Ridge regression).
+
+- **Machine Learning Models**, trained to fit the formula `formula_ml` defined earlier:
+
+  - **Random Forest**: Tree-based model that captures non-linear relationships using ensemble techniques.
+  
+  - **Gradient Boosting (XGBoost)**: Tree-based model that iteratively improves predictions by minimizing residual errors.
+  
+  - **K-Nearest Neighbors (KNN)**: Relies on proximity to training data points for predictions.
+  
+  - **Neural Networks**: Captures complex, non-linear patterns with interconnected layers of neurons.
+  
+  - **Ensemble Models**: Combines predictions from all individual models to enhance predictive performance and reduce error.
+  
+    - **Baseline Ensemble**: Uses simple averaging of predictions from all models as a straightforward benchmark.
+    
+    - **Weighted Ensemble**: Assigns weights to individual models based on their validation MAE, giving higher importance to more accurate models.
+    
+    - **Stacking Ensemble**: Employs a Ridge Regression meta-model to combine predictions, with hyperparameters tuned through grid search for optimal regularization (lambda ranging from 0.0001 to 0.1).  
+
+We will apply **hyperparameter tuning** to each model:
+
+- We will evaluate hyperparameter alternatives using **time series 3-fold cross-validation**, previously defined as `ctrl`.
+- Hyperparameters will be sampled using **Grid Search**. Other methods, such as Random Search, will not be used since they are simply a subset of grid search (when the grid is sufficiently large).
+
+After training and hyperparameter tuning:
+
+- Models will be evaluated on the validation data `val_cv` using MAE to identify the best-performing model.
+- **The selected model will be retrained** using all available sales information, in the combined `train_cv` and `val_cv` datasets.
+- The retrained model will be used to generate predictions for the `test_sales_data`.
+- There will be a **final analysis** on the effect of each investment on sales.
+
+## Elastic Net
+
+### Training and Evaluating Elastic Net
+
+Elastic Net is a regularization technique that incorporates both **L1 (Lasso)** and **L2 (Ridge)** penalties into the regression objective. This allows Elastic Net to combine the strengths of both techniques, providing variable selection (via L1) and stability in regression coefficients (via L2), especially when dealing with multicollinearity.
+
+To establish a baseline, we first train an Elastic Net model with **fixed hyperparameters**. This serves as a reference point for evaluating performance improvements achieved through hyperparameter tuning.
+
+In the following implementation:
+
+- We set **alpha** to `0.5`, indicating equal contribution of L1 and L2 penalties.
+- We set **lambda** at `0.01`, applying minimal regularization.
+- When computing the MAE on the validation set, we undo the transformation of the target through the formula $y = \log(x + 1) \implies x = \exp(y)-1$.
+
+```{r}
+# Baseline Elastic Net
+set.seed(123)
+elastic_baseline <- train(
+  formula_linear,
+  data = train_cv,
+  method = "glmnet",
+  tuneGrid = expand.grid(alpha = 0.5, lambda = 0.01),  # Fixed alpha and lambda
+  metric = "MAE",
+  trControl = ctrl
+)
+
+# Predict on val_cv
+val_cv$elastic_baseline_pred <- exp(predict(elastic_baseline, val_cv)) - 1
+
+# Calculate MAE on val_cv
+elastic_baseline_mae_val <- mean(abs(val_cv$elastic_baseline_pred - val_cv$Sales))
+elastic_baseline_mae_val
+```
+
+The elastic net method with no hyperparmaeter tuning reaches a MAE of approximately 328 in the validation set.
+
+We will now use elastic net with **grid search**. Grid Search systematically explores a predefined range of values for both `alpha` and `lambda`, enabling identification of the optimal combination of these hyperparameters.
+
+- **Alpha Range**: We will explore values from `0` (pure Ridge) to `1` (pure Lasso), with increments of `0.1`.
+
+- **Lambda Range**: We will vary regularization strength from `0.001` to `0.1`, ensuring thorough exploration of regularization effects.
+
+```{r}
+# Grid Search for Elastic Net
+set.seed(123)
+elastic_grid <- train(
+  formula_linear,
+  data = train_cv,
+  method = "glmnet",
+  tuneGrid = expand.grid(alpha = seq(0, 1, by = 0.1), lambda = seq(0, 0.1, by = 0.01)),  # Alpha and lambda grid
+  metric = "MAE",
+  trControl = ctrl
+)
+
+# Predict on val_cv using the best model from Grid Search
+val_cv$elastic_grid_pred <- exp(predict(elastic_grid, val_cv)) - 1
+
+# Calculate MAE on val_cv
+elastic_grid_mae_val <- mean(abs(val_cv$elastic_grid_pred - val_cv$Sales))
+elastic_grid_mae_val
+```
+
+We achieve the best results with `alpha = 0.3, lambda = 0.02`, reaching a MAE of 322, which is **better than the baseline model** (328).
+
+The graph illustrates the relationship between the mixing percentage (`alpha`) and the regularization parameter (`lambda`) with the Mean Absolute Error (MAE). Note the MAE is measured in logs since we do not undo the transformation within cross-validation:
+
+```{r}
+plot(elastic_grid)
+```
+
+As we can see, the MAE in the validation set is significantly higher when `lambda = 0`. This shows **the benefit of regularization in improving model generalization**.
+
+To further understand the model's predictive performance, we visualize the predicted vs actual values of `Sales` for the validation dataset (`val_cv`) using the Grid Search approach, which achieved the best performance.
+
+```{r}
+# Plot predicted vs actual values
+ggplot(val_cv, aes(x = elastic_grid_pred, y = Sales)) +
+  geom_point(color = "blue", alpha = 0.6) +
+  geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
+  labs(
+    title = "Elastic Net (Grid Search): Predicted vs Actual",
+    x = "Predicted Sales",
+    y = "Actual Sales"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+    axis.text = element_text(size = 12),
+    axis.title = element_text(size = 13)
+  )
+```
+
+Each blue point represents an individual observation, while the red dashed line indicates the ideal scenario where predictions perfectly match the actual values.
+
+From the plot, we observe that **most points cluster closely around the diagonal red line**, signifying strong predictive accuracy. However, some deviations are visible.
+
+We can also assess predictive accuracy by **plotting the predicted and real time series**:
+
+```{r}
+# Create time series plot of actual vs predicted sales
+ggplot(val_cv, aes(x = Monday_date)) +
+  geom_line(aes(y = Sales, color = "Actual"), linewidth = 1) +
+  geom_line(aes(y = elastic_grid_pred, color = "Predicted"), linewidth = 1) +
+  scale_color_manual(values = c("Actual" = "blue", "Predicted" = "red")) +
+  labs(
+    title = "Elastic Grid: Actual vs Predicted Sales Over Time",
+    x = "Date",
+    y = "Sales",
+    color = "Type"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+    axis.text = element_text(size = 12),
+    axis.title = element_text(size = 13),
+    legend.position = "bottom"
+  )
+```
+
+As we can see, **the model's prediction closely follows the actual values**, although:
+
+- It does not identify the noticeable drop at the beginning of December.
+- It **underestimates the effect of Christmas** on sales at the second week of January.
+- It **overestimates the effect of Easter** at the end of March.
+
+### Extracting Selected Features
+
+In this section, we extract **the features selected by the elastic net** and use them to define a new formula to be used with Machine Learning models (which have no inherent feature selection):
+
+```{r}
+# Extract coefficients from the elastic net model
+coef_elastic <- coef(elastic_grid$finalModel, elastic_grid$bestTune$lambda)
+coef_elastic <- as.matrix(coef_elastic)
+
+# Get feature names (excluding intercept)
+selected_features <- rownames(coef_elastic)[abs(coef_elastic) > 0][-1]  # Remove intercept
+cat("\nSelected Features:\n")
+print(selected_features)
+
+# Function to reverse log transformation in feature names
+reverse_log_transform <- function(feature_name) {
+  if(startsWith(feature_name, "log(") && endsWith(feature_name, " + 1)")) {
+    # Extract the variable name from inside log()
+    return(substr(feature_name, 5, nchar(feature_name) - 5))
+  }
+  return(feature_name)
+}
+
+# Process interaction terms for ML formula
+process_interaction_ml <- function(feature_name) {
+  if(grepl(":", feature_name)) {
+    # Split the interaction term
+    terms <- strsplit(feature_name, ":")[[1]]
+    # Process each term
+    processed_terms <- sapply(terms, reverse_log_transform)
+    # Recombine with :
+    return(paste(processed_terms, collapse = ":"))
+  }
+  return(reverse_log_transform(feature_name))
+}
+
+# Process features for ML formula (remove log transformations)
+selected_features_ml <- sapply(selected_features, process_interaction_ml)
+
+# Create ML formula (without transformations)
+formula_ml_elastic_grid <- as.formula(paste("Sales ~", 
+                                          paste(selected_features_ml, collapse = " + ")))
+
+# Create linear formula (keeping original transformations)
+formula_linear_elastic_grid <- as.formula(paste("log(Sales) ~", 
+                                              paste(selected_features, collapse = " + ")))
+
+# Print both formulas
+cat("\nML Formula (no transformations):\n")
+print(formula_ml_elastic_grid)
+
+cat("\nLinear Formula (with original log transformations):\n")
+print(formula_linear_elastic_grid)
+```
+
+Notice the following things about the selected features:
+
+- The **investments in radio, TikTok and database were excluded**, reflecting the weak correlations previously observed.
+- For the investment in **search engine advertising**, *only* the **lags** are selected, which suggests that this variable only has a lagged effect.
+- The engineered features, **vacation flags** and some of the **seasonality indicators**, are relevant.
+
+## Random Forest
+
+### Random Forest With All Features
+
+Random Forest is an ensemble learning method that combines multiple decision trees to achieve better predictive performance and reduce overfitting. The algorithm relies on two key principles: **bagging** and **feature randomness**. These properties make it highly effective for both regression and classification tasks.
+
+To establish a baseline, we train a Random Forest model using **default hyperparameters**. This serves as a reference point to measure the performance improvements achieved through hyperparameter tuning.
+
+- **Number of Trees**: Default value (500 trees) is used.
+
+- **mtry**: Number of predictors randomly sampled at each split is set to its default value (square root of the total number of predictors).
+
+- When computing predictions on the validation set, it is not necessary to undo any transformation, since we are now using `formula_ml`.
+
+```{r}
+# Baseline Random Forest
+set.seed(123)
+rforest_baseline <- train(
+  formula_ml,
+  data = train_cv,
+  method = "rf",
+  metric = "MAE",
+  trControl = ctrl
+)
+
+# Predict on val_cv
+val_cv$rforest_baseline_pred <- predict(rforest_baseline, val_cv)
+
+# Calculate MAE on val_cv
+rforest_baseline_mae_val <- mean(abs(val_cv$rforest_baseline_pred - val_cv$Sales))
+rforest_baseline_mae_val
+```
+
+Now, using random forest with **grid search**, we will systematically explore a predefined range of hyperparameter values for `mtry` (2, 4, 6, 8). Note `ntree` must stay fixed due to limitations in caret.
+
+```{r}
+set.seed(123)
+rforest_grid <- train(
+  formula_ml,
+  data = train_cv,
+  method = "rf",
+  tuneGrid = expand.grid(mtry = c(2, 4, 6, 8)),  # Only mtry parameter
+  metric = "MAE",
+  trControl = ctrl,
+  ntree = 500  # Set ntree as a fixed parameter outside tuneGrid
+)
+
+# Predict on val_cv using the best model from Grid Search
+val_cv$rforest_grid_pred <- predict(rforest_grid, val_cv)
+
+# Calculate MAE on val_cv
+rforest_grid_mae_val <- mean(abs(val_cv$rforest_grid_pred - val_cv$Sales))
+rforest_grid_mae_val
+```
+
+The tuned model has a **lower value for MAE** on the validation set (423 instead of 450), showing the benefit of using grid search instead of fixed hyperparameter values. However, it is **still a higher error than elastic net**. 
+
+The MAE achieved udring cross-validation for different values of `mtry` is:
+
+```{r}
+plot(rforest_grid)
+```
+
+From the plot, we observe two things:
+
+- The MAE seen during cross-validation (320) is significantly lower than the MAE of the validation set (423). This indicates **some level of overfitting** or particularities with the time periods covered by the validation set.
+
+- The MAE decreases consistently as the number of predictors increases, reaching the lowest point at the maximum value of `mtry` (8). This pattern suggests that increasing the number of predictors improves the model's predictive accuracy without introducing overfitting. Unlike typical scenarios where too many predictors can lead to overfitting, **Random Forest's inherent robustness against overfitting allows it to benefit from larger `mtry` values in this dataset**.
+
+To further understand the model's predictive performance, we visualize the predicted vs actual values of `Sales` for the validation dataset (`val_cv`) using the grid search approach, which achieved the best performance.
+
+```{r}
+# Plot predicted vs actual values for Baseline
+ggplot(val_cv, aes(x = rforest_grid_pred, y = Sales)) +
+  geom_point(color = "blue", alpha = 0.6) +
+  geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
+  labs(
+    title = "Random Forest (Baseline): Predicted vs Actual",
+    x = "Predicted Sales",
+    y = "Actual Sales"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+    axis.text = element_text(size = 12),
+    axis.title = element_text(size = 13)
+  )
+```
+
+To understand where the model is struggling, we will put **the predicted and real time series**:
+
+```{r}
+# Create time series plot of actual vs predicted sales
+ggplot(val_cv, aes(x = Monday_date)) +
+  geom_line(aes(y = Sales, color = "Actual"), linewidth = 1) +
+  geom_line(aes(y = rforest_grid_pred, color = "Predicted"), linewidth = 1) +
+  scale_color_manual(values = c("Actual" = "blue", "Predicted" = "red")) +
+  labs(
+    title = "Random Forest: Actual vs Predicted Sales Over Time",
+    x = "Date",
+    y = "Sales",
+    color = "Type"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+    axis.text = element_text(size = 12),
+    axis.title = element_text(size = 13),
+    legend.position = "bottom"
+  )
+```
+
+We notice the model:
+
+- **Underestimates the effect of Christmas** on reducing sales at 2024-01-08. Elastic net performed better in this case.
+- **Overestimates the effect of Eastern** on increasing sales at 2024-03-25. Elastic net had the same behavior.
+
+This happens even though `is_christmas_vacation` is 1 on 2024-03-25, and `is_eastern_vacation` is 0 on 2024-03-25.
+
+### Random Forest With Selected Features
+
+To address overfitting. we can try training the model on **subsets of selected features**:
+
+- `formula_ml_no_vacation` and `formula_ml_no_seasonal`, which do not include the vacation flags or seasonal indicators.
+- `formula_ml_elastic_grid`, which only includes the features selected by elastic net, but reverses the log transformations (in principle, not required for Machine Learning).
+- `formula_linear`, which includes all features with the log transformations (required by linear models).
+- `formula_linear_elastic_grid`, which only includes the features selected by elastic net and keeps the log transformations.
+
+```{r}
+# Train Random Forest model without vacation indicators
+set.seed(123)
+rf_no_vacation <- train(
+  formula_ml_no_vacation,
+  data = train_cv,
+  method = "rf",
+  metric = "MAE",
+  trControl = ctrl
+)
+val_cv$rf_no_vacation_pred <- predict(rf_no_vacation, val_cv)
+rf_no_vacation_mae_val <- mean(abs(val_cv$rf_no_vacation_pred - val_cv$Sales))
+
+# Train Random Forest model without seasonality indicators
+set.seed(123)
+rf_no_seasonal <- train(
+  formula_ml_no_seasonal,
+  data = train_cv,
+  method = "rf",
+  metric = "MAE",
+  trControl = ctrl
+)
+val_cv$rf_no_seasonal_pred <- predict(rf_no_seasonal, val_cv)
+rf_no_seasonal_mae_val <- mean(abs(val_cv$rf_no_seasonal_pred - val_cv$Sales))
+
+# Train Random Forest model with only elastic net features
+set.seed(123)
+rf_en_features <- train(
+  formula_ml_elastic_grid,
+  data = train_cv,
+  method = "rf",
+  metric = "MAE",
+  trControl = ctrl
+)
+val_cv$rf_en_features_pred <- predict(rf_en_features, val_cv)
+rf_en_features_mae_val <- mean(abs(val_cv$rf_en_features_pred - val_cv$Sales))
+
+# Train Random Forest model with the linear formula (having log transformations)
+set.seed(123)
+rf_linear <- train(
+  formula_linear,
+  data = train_cv,
+  method = "rf",
+  metric = "MAE",
+  trControl = ctrl
+)
+val_cv$rf_linear_pred <- exp(predict(rf_linear, val_cv)) - 1
+rf_linear_mae_val <- mean(abs(val_cv$rf_linear_pred - val_cv$Sales))
+
+# Train Random Forest model with the linear formula and features selected by elastic grid
+set.seed(123)
+rf_linear_en_features <- train(
+  formula_linear_elastic_grid,
+  data = train_cv,
+  method = "rf",
+  metric = "MAE",
+  trControl = ctrl
+)
+val_cv$rf_linear_en_features_pred <- exp(predict(rf_linear_en_features, val_cv)) - 1
+rf_linear_en_features_mae_val <- mean(abs(val_cv$rf_linear_en_features_pred - val_cv$Sales))
+
+cat("\nRandom Forest Model without Vacation - Validation MAE:", rf_no_vacation_mae_val, "\n")
+cat("Random Forest Model without Seasonality - Validation MAE:", rf_no_seasonal_mae_val, "\n")
+cat("Random Forest Model with Elastic Net features - Validation MAE:", rf_en_features_mae_val, "\n")
+cat("Random Forest Model with Linear formula - Validation MAE:", rf_linear_mae_val, "\n")
+cat("Random Forest Model with Linear formula and Elastic Net features - Validation MAE:", rf_linear_en_features_mae_val, "\n")
+```
+
+We notice that:
+
+- Using the **machine learning formula** and **elastic net features**, the MAE drops from the baseline (450) to 388, which is a significant improvement.
+- Using the **linear formula (log transformations)** and **all features**, the MAE is 416, better than the baseline.
+- Using the **linear formula (log transformations)** and **elastic net features**, the MAE is 371, which is better than the other random forest implementations, but still higher than elastic net.
+
+This gives two very important conclusions:
+
+- Despite not being necessary to satisfy assumptions, **log transformations can also be useful for Machine Learning**. We will try the linear formula in subsequent models.
+- Performance can be improved by **training Machine Learning models with only the Elastic Net features**, which is something we will try from now on.
+
+If we tune hyperparameters when using the linear formula and elastic net features, we get:
+
+```{r}
+set.seed(123)
+rf_linear_en_features_grid <- train(
+  formula_linear_elastic_grid,
+  data = train_cv,
+  method = "rf",
+  tuneGrid = expand.grid(mtry = c(2, 4, 6, 8)),  # Only mtry parameter
+  metric = "MAE",
+  trControl = ctrl,
+  ntree = 500  # Set ntree as a fixed parameter outside tuneGrid
+)
+
+# Predict on val_cv using the best model from Grid Search
+val_cv$rf_linear_en_features_grid_pred <- exp(predict(rf_linear_en_features_grid, val_cv)) - 1
+
+# Calculate MAE on val_cv
+rf_linear_en_features_grid_mae_val <- mean(abs(val_cv$rf_linear_en_features_grid_pred - val_cv$Sales))
+rf_linear_en_features_grid_mae_val
+```
+
+Which is higher than the model with default hyperparameters, so **leaving mtry as the default (square root of all features) is the best in this case**.
+
+## XGBoost
+
+### XGBoost With Default Configuration
+
+**XGBoost** (Extreme Gradient Boosting) is a powerful ensemble learning technique based on decision trees. It is highly flexible and effective in handling large datasets, offering built-in support for feature selection and regularization.
+
+We will train an XGBoost model using the default options, which **already perform hyperparameter tuning** automatically.
+
+Based on our observations with random forest, we will train XGBoost on:
+
+- Both the **machine learning formula** (no log transformations) and the **linear formula** (with log transformations).
+- Both using **all features** and **selected features** by elastic net.
+
+```{r, message=FALSE, echo=FALSE, results='hide', warning=FALSE}
+# Train XGBoost model with the machine learning formula
+set.seed(123)
+xgb_baseline <- train(
+  formula_ml,
+  data = train_cv,
+  method = "xgbTree",
+  metric = "MAE",
+  trControl = ctrl,
+  verbose = FALSE,
+  verbosity = 0
+)
+val_cv$xgb_baseline_pred <- predict(xgb_baseline, val_cv)
+xgb_baseline_mae_val <- mean(abs(val_cv$xgb_baseline_pred - val_cv$Sales))
+
+# Train XGBoost model with machine learning formula and features selected by elastic grid
+set.seed(123)
+xgb_en_features <- train(
+  formula_ml_elastic_grid,
+  data = train_cv,
+  method = "xgbTree",
+  metric = "MAE",
+  trControl = ctrl,
+  verbose = FALSE,
+  verbosity = 0
+)
+val_cv$xgb_en_features_pred <- predict(xgb_en_features, val_cv)
+xgb_en_features_mae_val <- mean(abs(val_cv$xgb_en_features_pred - val_cv$Sales))
+
+# Train XGBoost model with the linear formula (having log transformations)
+set.seed(123)
+xgb_linear <- train(
+  formula_linear,
+  data = train_cv,
+  method = "xgbTree",
+  metric = "MAE",
+  trControl = ctrl,
+  verbose = FALSE,
+  verbosity = 0
+)
+val_cv$xgb_linear_pred <- exp(predict(xgb_linear, val_cv)) - 1  # Transform back from log scale
+xgb_linear_mae_val <- mean(abs(val_cv$xgb_linear_pred - val_cv$Sales))
+
+# Train XGBoost model with the linear formula and features selected by elastic grid
+set.seed(123)
+xgb_linear_en_features <- train(
+  formula_linear_elastic_grid,
+  data = train_cv,
+  method = "xgbTree",
+  metric = "MAE",
+  trControl = ctrl,
+  verbose = FALSE,
+  verbosity = 0
+)
+val_cv$xgb_linear_en_features_pred <- exp(predict(xgb_linear_en_features, val_cv)) - 1  # Transform back from log scale
+xgb_linear_en_features_mae_val <- mean(abs(val_cv$xgb_linear_en_features_pred - val_cv$Sales))
+```
+
+Results:
+
+```{r}
+# Print results
+cat("XGBoost Baseline Model (ML formula, all features) - Validation MAE:", xgb_baseline_mae_val, "\n")
+cat("XGBoost Baseline Model with  Elastic Net features - Validation MAE:", xgb_en_features_mae_val, "\n")
+cat("XGBoost Model with Linear formula - Validation MAE:", xgb_linear_mae_val, "\n")
+cat("XGBoost Model with Linear formula and Elastic Net features - Validation MAE:", xgb_linear_en_features_mae_val, "\n")
+```
+
+In this case, we get the best results using the **machine learning formula** (no log transformations) and the **features selected by elastic net**, with a resulting MAE of 332. Surprisingly, this is still higher than elastic net (322).
+
+To complement the analysis, we will now illustrates the relationship between the number of boosting rounds (`nrounds`) and the Mean Absolute Error (MAE) for the XGBoost model with elastic net features (the best model) under different configurations of `colsample_bytree`, `subsample`, `eta`, and `max_depth`:
+
+```{r}
+# Plot tuning results for the XGBoost model with Elastic Net features
+plot(xgb_en_features)
+```
+
+```{r}
+plot(xgb_baseline)
+```
+
+
+We notice there is no clear impact for any of the hyperparameters individually. For example, the best `max_depth` depends on the values of the other parameters. In addition, like in random forest, we observe much lower MAE in cross-validation (lower than 250) than in the validation set (332).
+
+Plotting the time series, we see **the model struggles in the same periods as random forest**:
+
+```{r}
+# Create time series plot of actual vs predicted sales
+ggplot(val_cv, aes(x = Monday_date)) +
+  geom_line(aes(y = Sales, color = "Actual"), linewidth = 1) +
+  geom_line(aes(y = xgb_en_features_pred, color = "Predicted"), linewidth = 1) +
+  scale_color_manual(values = c("Actual" = "blue", "Predicted" = "red")) +
+  labs(
+    title = "XGBoost: Actual vs Predicted Sales Over Time",
+    x = "Date",
+    y = "Sales",
+    color = "Type"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+    axis.text = element_text(size = 12),
+    axis.title = element_text(size = 13),
+    legend.position = "bottom"
+  )
+```
+
+### XGBoost With Regularization
+
+We will now train XGBoost with a **cutom parameter grid** having:
+
+- **For feature selection**: using `colsample_bytree` < 1 to randomly select features and increasing `gamma` to make the model more conservative about creating new splits.
+
+- **For regularization**: using `subsample` < 1 to prevent overfitting.
+
+```{r, message=FALSE, echo=FALSE, results='hide', warning=FALSE}
+# Define custom tuning grid with regularization parameters
+xgb_grid <- expand.grid(
+  nrounds = c(100, 200),              # Number of trees
+  max_depth = c(3, 6),                # Tree depth - lower values increase regularization
+  eta = c(0.01, 0.1),                 # Learning rate
+  gamma = c(0, 1, 5),                 # Minimum loss reduction for split - higher values = more conservative
+  colsample_bytree = c(0.6, 0.8, 1),  # Fraction of features to sample for each tree
+  min_child_weight = c(1, 5),         # Minimum sum of instance weights in child
+  subsample = c(0.7, 1)               # Fraction of samples to train each tree
+)
+# Train XGBoost with regularization
+set.seed(123)
+xgb_regularized <- train(
+  formula_ml,
+  data = train_cv,
+  method = "xgbTree",
+  metric = "MAE",
+  trControl = ctrl,
+  tuneGrid = xgb_grid,
+  verbose = FALSE,
+  verbosity = 0
+)
+```
+
+Results:
+
+```{r}
+# Make predictions
+val_cv$xgb_regularized_pred <- predict(xgb_regularized, val_cv)
+xgb_regularized_mae_val <- mean(abs(val_cv$xgb_regularized_pred - val_cv$Sales))
+cat("XGBoost Regularized Model - Validation MAE:", xgb_regularized_mae_val, "\n")
+```
+
+We see **the MAE on the validation set is higher than the previous models**, indicating the chosen hyperparameter grid for regularization does not generalize well.
+
+
+## KNN
+
+KNN is a non-parametric algorithm that predicts the value of a target variable based on the values of its nearest neighbors. Unlike Ridge Regression, KNN does not involve fitting a model but instead relies on distance calculations to identify neighbors. In our implementation:
+
+- We will try **all the formulas** tested previously for XGBoost: with/without log transformations, with/without feature selection with elastic net.
+- We will **preprocess the data by scaling and centering**, which is required by the kNN method because it is based on distances.
+
+To establish a baseline, we first train the KNN model using a **fixed value** of `k = 5`. This serves as a reference point to measure the performance improvements achieved through hyperparameter tuning.
+
+```{r, message=FALSE, echo=FALSE, results='hide', warning=FALSE}
+# Train KNN model with the machine learning formula
+set.seed(123)
+knn_baseline <- train(
+  formula_ml,
+  data = train_cv,
+  method = "knn",
+  tuneGrid = data.frame(k = 5),  # Fixed default k
+  metric = "MAE",
+  trControl = ctrl,
+  preProcess = c("center", "scale")  # Added preprocessing
+)
+val_cv$knn_baseline_pred <- predict(knn_baseline, val_cv)
+knn_baseline_mae_val <- mean(abs(val_cv$knn_baseline_pred - val_cv$Sales))
+
+# Train KNN model with machine learning formula and features selected by elastic grid
+set.seed(123)
+knn_en_features <- train(
+  formula_ml_elastic_grid,
+  data = train_cv,
+  method = "knn",
+  tuneGrid = data.frame(k = 5),
+  metric = "MAE",
+  trControl = ctrl,
+  preProcess = c("center", "scale")  # Added preprocessing
+)
+val_cv$knn_en_features_pred <- predict(knn_en_features, val_cv)
+knn_en_features_mae_val <- mean(abs(val_cv$knn_en_features_pred - val_cv$Sales))
+
+# Train KNN model with the linear formula (having log transformations)
+set.seed(123)
+knn_linear <- train(
+  formula_linear,
+  data = train_cv,
+  method = "knn",
+  tuneGrid = data.frame(k = 5),
+  metric = "MAE",
+  trControl = ctrl,
+  preProcess = c("center", "scale")  # Added preprocessing
+)
+val_cv$knn_linear_pred <- exp(predict(knn_linear, val_cv)) - 1  # Transform back from log scale
+knn_linear_mae_val <- mean(abs(val_cv$knn_linear_pred - val_cv$Sales))
+
+# Train KNN model with the linear formula and features selected by elastic grid
+set.seed(123)
+knn_linear_en_features <- train(
+  formula_linear_elastic_grid,
+  data = train_cv,
+  method = "knn",
+  tuneGrid = data.frame(k = 5),
+  metric = "MAE",
+  trControl = ctrl,
+  preProcess = c("center", "scale")  # Added preprocessing
+)
+val_cv$knn_linear_en_features_pred <- exp(predict(knn_linear_en_features, val_cv)) - 1  # Transform back from log scale
+knn_linear_en_features_mae_val <- mean(abs(val_cv$knn_linear_en_features_pred - val_cv$Sales))
+```
+
+Results:
+
+```{r}
+# Print results
+cat("KNN Baseline Model (ML formula, all features) - Validation MAE:", knn_baseline_mae_val, "\n")
+cat("KNN Baseline Model with Elastic Net features - Validation MAE:", knn_en_features_mae_val, "\n")
+cat("KNN Model with Linear formula - Validation MAE:", knn_linear_mae_val, "\n")
+cat("KNN Model with Linear formula and Elastic Net features - Validation MAE:", knn_linear_en_features_mae_val, "\n")
+```
+
+The best results are achieved with the **machine learning formula** and the **elastic net feature selection** (just like XGBoost), with a MAE of 356. This is lower than random forest (371) but higher than elastic net (322) or XGBoost (332).
+
+With **grid search**, we can systematically explore a predefined range of hyperparameter values for `k`, ensuring the optimal configuration within the specified grid is identified.
+
+```{r, message=FALSE, echo=FALSE, results='hide', warning=FALSE}
+# Grid Search for KNN with ML formula (all features)
+set.seed(123)
+knn_baseline_grid <- train(
+  formula_ml,
+  data = train_cv,
+  method = "knn",
+  tuneGrid = data.frame(k = seq(1, 20, by = 2)),  # k grid
+  metric = "MAE",
+  trControl = ctrl,
+  preProcess = c("center", "scale")
+)
+val_cv$knn_baseline_grid_pred <- predict(knn_baseline_grid, val_cv)
+knn_baseline_grid_mae_val <- mean(abs(val_cv$knn_baseline_grid_pred - val_cv$Sales))
+
+# Grid Search for KNN with ML formula and elastic net features
+set.seed(123)
+knn_en_features_grid <- train(
+  formula_ml_elastic_grid,
+  data = train_cv,
+  method = "knn",
+  tuneGrid = data.frame(k = seq(1, 20, by = 2)),
+  metric = "MAE",
+  trControl = ctrl,
+  preProcess = c("center", "scale")
+)
+val_cv$knn_en_features_grid_pred <- predict(knn_en_features_grid, val_cv)
+knn_en_features_grid_mae_val <- mean(abs(val_cv$knn_en_features_grid_pred - val_cv$Sales))
+
+# Grid Search for KNN with linear formula
+set.seed(123)
+knn_linear_grid <- train(
+  formula_linear,
+  data = train_cv,
+  method = "knn",
+  tuneGrid = data.frame(k = seq(1, 20, by = 2)),
+  metric = "MAE",
+  trControl = ctrl,
+  preProcess = c("center", "scale")
+)
+val_cv$knn_linear_grid_pred <- exp(predict(knn_linear_grid, val_cv)) - 1
+knn_linear_grid_mae_val <- mean(abs(val_cv$knn_linear_grid_pred - val_cv$Sales))
+
+# Grid Search for KNN with linear formula and elastic net features
+set.seed(123)
+knn_linear_en_features_grid <- train(
+  formula_linear_elastic_grid,
+  data = train_cv,
+  method = "knn",
+  tuneGrid = data.frame(k = seq(1, 20, by = 2)),
+  metric = "MAE",
+  trControl = ctrl,
+  preProcess = c("center", "scale")
+)
+val_cv$knn_linear_en_features_grid_pred <- exp(predict(knn_linear_en_features_grid, val_cv)) - 1
+knn_linear_en_features_grid_mae_val <- mean(abs(val_cv$knn_linear_en_features_grid_pred - val_cv$Sales))
+```
+
+Results:
+
+```{r}
+# Print results
+cat("KNN Grid Search - ML formula (all features) - Validation MAE:", knn_baseline_grid_mae_val, "\n")
+cat("KNN Grid Search - ML formula with Elastic Net features - Validation MAE:", knn_en_features_grid_mae_val, "\n")
+cat("KNN Grid Search - Linear formula - Validation MAE:", knn_linear_grid_mae_val, "\n")
+cat("KNN Grid Search - Linear formula with Elastic Net features - Validation MAE:", knn_linear_en_features_grid_mae_val, "\n")
+
+# Print best k values for each model
+cat("\nBest k values:\n")
+cat("ML formula (all features):", knn_baseline_grid$bestTune$k, "\n")
+cat("ML formula with Elastic Net features:", knn_en_features_grid$bestTune$k, "\n")
+cat("Linear formula:", knn_linear_grid$bestTune$k, "\n")
+cat("Linear formula with Elastic Net features:", knn_linear_en_features_grid$bestTune$k, "\n")
+```
+
+The best formula is still the one considering the original variables (no log) and the elastic net features. With this, we get a **surprisingly low MAE of 307**, which is the best so far.
+
+This is the evolution of the cross-validation MAE during hyperparameter tuning:
+
+```{r}
+plot(knn_en_features_grid)
+```
+
+Scatter plot of actual and predicted values:
+
+```{r}
+# Plot predicted vs actual values for Random Search
+ggplot(val_cv, aes(x = knn_en_features_grid_pred, y = Sales)) +
+  geom_point(color = "blue", alpha = 0.6) +
+  geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
+  labs(
+    title = "KNN: Predicted vs Actual",
+    x = "Predicted Sales",
+    y = "Actual Sales"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+    axis.text = element_text(size = 12),
+    axis.title = element_text(size = 13)
+  )
+```
+
+
+All predictions are close to the red line, except for two cases were the sales are overestimated. This reflects the lower MAE obtained with KNN.
+
+Time-series plot:
+
+```{r}
+# Create time series plot of actual vs predicted sales
+ggplot(val_cv, aes(x = Monday_date)) +
+  geom_line(aes(y = Sales, color = "Actual"), linewidth = 1) +
+  geom_line(aes(y = knn_en_features_grid_pred, color = "Predicted"), linewidth = 1) +
+  scale_color_manual(values = c("Actual" = "blue", "Predicted" = "red")) +
+  labs(
+    title = "KNN: Actual vs Predicted Sales Over Time",
+    x = "Date",
+    y = "Sales",
+    color = "Type"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+    axis.text = element_text(size = 12),
+    axis.title = element_text(size = 13),
+    legend.position = "bottom"
+  )
+```
+
+The predictions is now much closer to the real value.
+
+## Neural Networks
+
+Neural Networks are powerful models capable of capturing non-linear relationships in data. They consist of multiple layers of interconnected nodes (neurons) and require careful hyperparameter tuning to achieve optimal performance. The primary hyperparameters to tune for Neural Networks include the number of hidden units (neurons), learning rate, and the number of epochs.
+
+To establish a baseline, we train a Neural Network model using a **fixed architecture** with a single hidden layer of 10 neurons and **default parameters** for the learning rate and epochs. This serves as a reference point to measure the performance improvements achieved through hyperparameter tuning.
+
+- **Chosen Hyperparameters**:
+
+  - **Size**: Number of neurons in the hidden layer, set to 10 for the baseline.
+  
+  - **Decay**: Regularization parameter to prevent overfitting, set to 0.01.
+
+- **Formulas**: Based on our previous experience, we will consider only the machine learning formulas (no log transformations) but with all features or only selected features.
+
+- **Preprocessing**: Just like kNN, neural networks benefit from having scaled and centered data.
+
+```{r}
+# Baseline Neural Network with ML formula (all features)
+set.seed(123)
+nnet_baseline <- train(
+  formula_ml,
+  data = train_cv,
+  method = "nnet",
+  linout = TRUE,  # Regression output
+  tuneGrid = expand.grid(size = 10, decay = 0.01),  # Fixed size and decay
+  metric = "MAE",
+  trace = FALSE,  # Suppress training output
+  trControl = ctrl,
+  preProcess = c("center", "scale")  # Added preprocessing
+)
+val_cv$nnet_baseline_pred <- predict(nnet_baseline, val_cv)
+nnet_baseline_mae_val <- mean(abs(val_cv$nnet_baseline_pred - val_cv$Sales))
+
+# Neural Network with ML formula and elastic net features
+set.seed(123)
+nnet_en_features <- train(
+  formula_ml_elastic_grid,
+  data = train_cv,
+  method = "nnet",
+  linout = TRUE,  # Regression output
+  tuneGrid = expand.grid(size = 10, decay = 0.01),  # Fixed size and decay
+  metric = "MAE",
+  trace = FALSE,  # Suppress training output
+  trControl = ctrl,
+  preProcess = c("center", "scale")  # Added preprocessing
+)
+val_cv$nnet_en_features_pred <- predict(nnet_en_features, val_cv)
+nnet_en_features_mae_val <- mean(abs(val_cv$nnet_en_features_pred - val_cv$Sales))
+
+# Print results
+cat("Neural Network Baseline Model (ML formula, all features) - Validation MAE:", nnet_baseline_mae_val, "\n")
+cat("Neural Network Model with Elastic Net features - Validation MAE:", nnet_en_features_mae_val, "\n")
+```
+
+We notice using **only elastic net features** improves results, reducing the MAE to 392. However, this is higher than other methods.
+
+With **grid Search**, we can systematically explore a predefined range of hyperparameter values for the number of neurons (`size`) and the regularization parameter (`decay`):
+
+- **Size Range**: A grid of values (5, 10, 15) is tested to explore different network capacities.
+
+- **Decay Range**: Regularization values (0.001, 0.01, 0.1) are tested to manage overfitting.
+
+```{r}
+# Grid Search for Neural Networks
+set.seed(123)
+nnet_grid <- train(
+  formula_ml_elastic_grid,
+  data = train_cv,
+  method = "nnet",
+  linout = TRUE,  # Regression output
+  tuneGrid = expand.grid(
+    size = c(5, 10, 15),  # Number of neurons
+    decay = c(0.001, 0.01, 0.1)  # Regularization parameter
+  ),
+  metric = "MAE",
+  trace = FALSE,
+  trControl = ctrl,
+  preProcess = c("center", "scale")
+)
+
+# Predict on val_cv using the best model from Grid Search
+val_cv$nnet_grid_pred <- predict(nnet_grid, val_cv)
+
+# Calculate MAE on val_cv
+nnet_grid_mae_val <- mean(abs(val_cv$nnet_grid_pred - val_cv$Sales))
+nnet_grid_mae_val
+```
+
+With grid search, we **lower the MAE to 346**, but this is still higher than the best MAE of other methods such as elastic net, XGBoost or KNN.
+
+To complement the analysis, a plot showing the relationship between the number of neurons (`size`) and the Mean Absolute Error (MAE) for different regularization parameters (`decay`) is included:
+
+```{r}
+plot(nnet_grid)
+```
+
+## Ensemble Model
+
+### Introduction
+
+We will **build an ensemble model** by combining predictions from elastic Net, Random Forest, XGBoost, Neural Networks, and KNN to leverage their individual strengths and mitigate weaknesses. We will consider the best model of each case:
+
+- **Elastic Net**: model using the grid search hyperparameters, `elastic_grid_pred`, which achieved MAE of 322 using alpha = 0.3 and lambda = 0.02.
+- **Random Forest**: model using the linear formula with elastic net features, `rf_linear_en_features_pred`, which achieved MAE of 371 using default hyperparameters.
+- **XGBoost**: model using machine learning formula with elastic net features, `xgb_en_features_pred`, which achieved MAE of 332 using default hyperparameters.
+- **KNN**: model using machine learning formula with elastic net features and grid search, `knn_en_features_grid_pred`, which achieved MAE of 307 using k = 3.
+- **Neural Network**: model using machine learning formula with elastic net features and grid search, nnet_grid_pred, which achieved MAE of 346 using 10 neurons and decay = 0.01.
+
+The ensemble model employs **Weighted Averaging** and **Stacking** to evaluate its predictive capabilities.
+
+### Ensemble Model With Equal Weights
+
+To implement this ensemble, predictions from all models are **averaged equally** to produce an ensemble prediction.
+
+```{r}
+# Collect predictions from individual models
+ensemble_data <- val_cv %>%
+  select(Sales,
+         elastic = elastic_grid_pred,
+         rf = rf_linear_en_features_pred,
+         xgb = xgb_en_features_pred,
+         knn = knn_en_features_grid_pred,
+         nnet = nnet_grid_pred)
+
+# Simple Average Ensemble
+ensemble_data <- ensemble_data %>%
+  mutate(ensemble_avg = (elastic + rf + xgb + knn + nnet) / 5)
+mae_avg <- mean(abs(ensemble_data$ensemble_avg - ensemble_data$Sales))
+mae_avg
+```
+
+We notice **the MAE is 301**, which is lower than the lowest MAE of each individual model, and particularly KNN (which had 307).
+
+### Ensemble Model With Weights
+
+In this approach, **weights are assigned to each model based on their validation MAE**. Better-performing models have higher weights.
+
+```{r}
+# 2. Weighted Ensemble (weights based on inverse MAE)
+# Calculate individual MAEs
+mae_elastic <- mean(abs(ensemble_data$elastic - ensemble_data$Sales))
+mae_rf <- mean(abs(ensemble_data$rf - ensemble_data$Sales))
+mae_xgb <- mean(abs(ensemble_data$xgb - ensemble_data$Sales))
+mae_knn <- mean(abs(ensemble_data$knn - ensemble_data$Sales))
+mae_nnet <- mean(abs(ensemble_data$nnet - ensemble_data$Sales))
+
+# Calculate weights (inverse of MAE)
+weights <- c(1/mae_elastic, 1/mae_rf, 1/mae_xgb, 1/mae_knn, 1/mae_nnet)
+weights <- weights / sum(weights)  # Normalize weights
+
+# Apply weighted ensemble
+ensemble_data <- ensemble_data %>%
+  mutate(ensemble_weighted = 
+           weights[1] * elastic +
+           weights[2] * rf +
+           weights[3] * xgb +
+           weights[4] * knn +
+           weights[5] * nnet)
+mae_weighted <- mean(abs(ensemble_data$ensemble_weighted - ensemble_data$Sales))
+mae_weighted
+```
+
+With weighted averages, **MAE is dropped to 299**.
+
+### Ensemble Model With Stacking
+
+**Stacking** uses predictions from individual models as input features for a meta-model (e.g., Ridge Regression) to learn the best combination of predictions.
+
+```{r}
+# 3. Stacking Ensemble using Ridge Regression
+# Create training data for meta-model using cross-validation predictions
+meta_train <- data.frame(
+  Sales = train_cv$Sales,
+  elastic = exp(predict(elastic_grid, train_cv)) - 1,
+  rf = exp(predict(rf_linear_en_features, train_cv)) - 1,
+  xgb = predict(xgb_en_features, train_cv),
+  knn = predict(knn_en_features_grid, train_cv),
+  nnet = predict(nnet_grid, train_cv)
+)
+
+# Train meta-model (Ridge Regression)
+# Grid of lambda values for Ridge
+lambda_grid <- expand.grid(alpha = 0,  # Ridge regression
+                          lambda = 10^seq(-4, -1, length.out = 10))
+
+meta_model <- train(
+  Sales ~ .,
+  data = meta_train,
+  method = "glmnet",
+  tuneGrid = lambda_grid,
+  trControl = trainControl(method = "cv", number = 5),
+  metric = "MAE"
+)
+
+# Make predictions with stacking ensemble
+ensemble_data$ensemble_stacking <- predict(meta_model, 
+                                         select(ensemble_data, -Sales, 
+                                               -ensemble_avg, -ensemble_weighted))
+mae_stacking <- mean(abs(ensemble_data$ensemble_stacking - ensemble_data$Sales))
+mae_stacking
+```
+
+The meta-model has a validation MAE of 307, which is higher than the weighted ensemble.
+
+### Visualizations for the Best Approach
+
+According to our validation set, the best approach is **Weigthed Ensemble**, which has the following predictions:
+
+- **Scatted Plot**, predicted vs. actual:
+
+```{r}
+# Plot predicted vs actual values for Stacking Ensemble
+ggplot(val_cv, aes(x = ensemble_data$ensemble_weighted, y = Sales)) +
+  geom_point(color = "blue", alpha = 0.6) +
+  geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
+  labs(
+    title = "Weighted Ensemble: Predicted vs Actual",
+    x = "Predicted Sales",
+    y = "Actual Sales"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+    axis.text = element_text(size = 12),
+    axis.title = element_text(size = 13)
+  )
+```
+
+- **Time Series Plot**, predicted vs. actual:
+
+```{r}
+# Create time series plot of actual vs predicted sales
+ggplot(val_cv, aes(x = Monday_date)) +
+  geom_line(aes(y = Sales, color = "Actual"), linewidth = 1) +
+  geom_line(aes(y = ensemble_data$ensemble_weighted, color = "Predicted"), linewidth = 1) +
+  scale_color_manual(values = c("Actual" = "blue", "Predicted" = "red")) +
+  labs(
+    title = "Weighted Ensemble: Actual vs Predicted Sales Over Time",
+    x = "Date",
+    y = "Sales",
+    color = "Type"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+    axis.text = element_text(size = 12),
+    axis.title = element_text(size = 13),
+    legend.position = "bottom"
+  )
+```
+
+We notice the Weigthed Ensembles captures most of the trends in the validation dataset.
+
+## Model Comparison
+
+To evaluate the performance of the models and optimization strategies implemented, the following table summarizes the **Mean Absolute Error (MAE) for each best-performing model** across all approaches:
+
+```{r}
+# Create dataframe with model performance
+model_performance <- data.frame(
+  Model = c(
+    "Elastic Net (Grid)",
+    "Random Forest (Linear + EN Features)",
+    "XGBoost (ML + EN Features)",
+    "KNN (ML + EN Features, Grid)",
+    "Neural Network (ML + EN Features, Grid)",
+    "Simple Average Ensemble",
+    "Weighted Ensemble",
+    "Stacking Ensemble"
+  ),
+  MAE = c(
+    mean(abs(val_cv$elastic_grid_pred - val_cv$Sales)),
+    mean(abs(val_cv$rf_linear_en_features_pred - val_cv$Sales)),
+    mean(abs(val_cv$xgb_en_features_pred - val_cv$Sales)),
+    mean(abs(val_cv$knn_en_features_grid_pred - val_cv$Sales)),
+    mean(abs(val_cv$nnet_grid_pred - val_cv$Sales)),
+    mae_avg,
+    mae_weighted,
+    mae_stacking
+  )
+) %>%
+  arrange(MAE)  # Sort by MAE
+
+# Calculate improvement over baseline (Elastic Net)
+model_performance <- model_performance %>%
+  mutate(
+    Improvement = (max(MAE) - MAE) / max(MAE) * 100,
+    Category = case_when(
+      grepl("Ensemble", Model) ~ "Ensemble Methods",
+      TRUE ~ "Individual Models"
+    )
+  )
+
+# Create comparison plot
+ggplot(model_performance, aes(x = reorder(Model, -MAE), y = MAE, fill = Category)) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = sprintf("%.1f", MAE)), 
+            vjust = -0.5, size = 3) +
+  scale_fill_manual(values = c("Ensemble Methods" = "skyblue", 
+                              "Individual Models" = "darkblue")) +
+  labs(
+    title = "Model Performance Comparison",
+    subtitle = "Mean Absolute Error (MAE) on Validation Set",
+    x = "Model",
+    y = "MAE",
+    fill = "Model Type"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 90, hjust = 1),
+    plot.title = element_text(hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5)
+  )
+
+# Print performance table
+print("Model Performance Summary:")
+print(model_performance)
+```
+
+The **Weighted Ensemble** model achieved the lowest MAE of **299**, outperforming all individual models and optimization techniques.
+
+# Final Model and Predictions
+
+To **get the final predictions**, we will:
+
+- Retrain the selected models on the **full training dataset** (merging `train_cv` and `val_cv`).
+- Repeat **hyperparameter tuning** with the most successful configuration in each case (but using more data now).
+- Compute the **new individual MAEs** that will act as weights for the Weighted Ensemble model.
+
+```{r, echo=TRUE, results="hide", message=FALSE, warning=FALSE}
+# Get common columns between train_cv and val_cv
+common_cols <- intersect(colnames(train_cv), colnames(val_cv))
+
+# Combine training and validation datasets using only common columns
+full_train <- rbind(
+  train_cv[, common_cols],
+  val_cv[, common_cols]
+)
+
+# Define new time series cross-validation control for full training data
+n_iter_cv_full <- 3  # Number of CV iterations
+full_train_weeks <- nrow(full_train)
+initial_window_full <- floor(0.5 * full_train_weeks)  # 50% of data for initial training
+assessment_size_full <- floor((full_train_weeks - initial_window_full) / n_iter_cv_full)
+
+ctrl_full <- trainControl(
+  method = "timeslice",
+  initialWindow = initial_window_full,
+  horizon = assessment_size_full,
+  skip = assessment_size_full - 1,
+  fixedWindow = TRUE,
+  allowParallel = TRUE,
+  verboseIter = TRUE
+)
+
+# 1. Retrain Elastic Net with grid search
+elastic_grid_final <- train(
+  formula_linear,
+  data = full_train,
+  method = "glmnet",
+  tuneGrid = expand.grid(
+    alpha = seq(0, 1, by = 0.1), 
+    lambda = seq(0, 0.1, by = 0.01)
+  ),
+  metric = "MAE",
+  trControl = ctrl_full
+)
+
+# 2. Retrain Random Forest with linear formula and elastic net features
+rf_grid_final <- train(
+  formula_linear_elastic_grid,
+  data = full_train,
+  method = "rf",
+  tuneGrid = expand.grid(mtry = c(2, 4, 6, 8)),
+  metric = "MAE",
+  trControl = ctrl_full,
+  ntree = 500
+)
+
+# 3. Retrain XGBoost with grid search
+xgb_grid_final <- train(
+  formula_ml_elastic_grid,
+  data = full_train,
+  method = "xgbTree",
+  tuneGrid = expand.grid(
+    nrounds = c(100, 200),
+    max_depth = c(3, 6),
+    eta = c(0.01, 0.1),
+    gamma = c(0, 1, 5),
+    colsample_bytree = c(0.6, 0.8, 1),
+    min_child_weight = c(1, 5),
+    subsample = c(0.7, 1)
+  ),
+  metric = "MAE",
+  trControl = ctrl_full,
+  verbose = FALSE,
+  verbosity = 0
+)
+
+# 4. Retrain KNN with grid search
+knn_grid_final <- train(
+  formula_ml_elastic_grid,
+  data = full_train,
+  method = "knn",
+  tuneGrid = data.frame(k = seq(1, 20, by = 2)),
+  metric = "MAE",
+  trControl = ctrl_full,
+  preProcess = c("center", "scale")
+)
+
+# 5. Retrain Neural Network with grid search
+nnet_grid_final <- train(
+  formula_ml_elastic_grid,
+  data = full_train,
+  method = "nnet",
+  linout = TRUE,
+  tuneGrid = expand.grid(
+    size = c(5, 10, 15),
+    decay = c(0.001, 0.01, 0.1)
+  ),
+  metric = "MAE",
+  trace = FALSE,
+  trControl = ctrl_full,
+  preProcess = c("center", "scale")
+)
+```
+
+The **best hyperparameters** found by re-doing hyperparameter tuning with all data are:
+
+```{r}
+# Print best parameters for each model
+cat("\nBest parameters for each model:\n")
+cat("\nElastic Net:\n")
+print(elastic_grid_final$bestTune)
+cat("\nRandom Forest:\n")
+print(rf_grid_final$bestTune)
+cat("\nXGBoost:\n")
+print(xgb_grid_final$bestTune)
+cat("\nKNN:\n")
+print(knn_grid_final$bestTune)
+cat("\nNeural Network:\n")
+print(nnet_grid_final$bestTune)
+```
+
+Note they **generally do not match** the hyperparmeters found using `train_cv` only.
+
+The **cross-validation MAEs** are given by the following code snippet. For models using log transformation (elastic net and random forest), we need to transform MAE back to original scale. If MAE is the average of |log(pred) - log(true)|, then exp(MAE) approximates the ratio pred/true; so exp(MAE)-1 approximates the relative error |pred-true|/true and multiplying by mean(true) gives us the MAE in original scale.
+
+```{r}
+# Calculate final cross-validation MAEs for each model
+mean_sales <- mean(full_train$Sales)
+cv_maes <- c(
+  (exp(min(elastic_grid_final$results$MAE)) - 1) * mean_sales,  # Transform from log scale
+  (exp(min(rf_grid_final$results$MAE)) - 1) * mean_sales,       # Transform from log scale
+  min(xgb_grid_final$results$MAE),                              # Already in original scale
+  min(knn_grid_final$results$MAE),                              # Already in original scale
+  min(nnet_grid_final$results$MAE)                              # Already in original scale
+)
+
+# Print cross-validation MAEs
+print("\nCross-validation MAEs:")
+names(cv_maes) <- c("Elastic Net", "Random Forest", "XGBoost", "KNN", "Neural Network")
+print(cv_maes)
+```
+
+When re-training with the whole training data, **the best model is now XGBoost**, followed by other Machine Learning models (KNN and Neural Networks). Elastic Net and Random Forest have fallen all the way to the last spot.
+
+```{r}
+# Generate predictions for test dataset
+test_pred <- data.frame(
+  elastic = exp(predict(elastic_grid_final, test_sales_data)) - 1,
+  rf = exp(predict(rf_grid_final, test_sales_data)) - 1,
+  xgb = predict(xgb_grid_final, test_sales_data),
+  knn = predict(knn_grid_final, test_sales_data),
+  nnet = predict(nnet_grid_final, test_sales_data)
+)
+
+# Calculate weights based on cross-validation MAE
+weights <- 1/cv_maes
+weights <- weights/sum(weights)  # Normalize weights
+
+# Generate final weighted predictions
+test_sales_data$predicted_sales <- with(test_pred,
+  weights[1] * elastic +
+  weights[2] * rf +
+  weights[3] * xgb +
+  weights[4] * knn +
+  weights[5] * nnet
+)
+
+# Create visualization of predictions
+predictions_plot <- ggplot(test_sales_data, aes(x = Monday_date, y = predicted_sales)) +
+  geom_line(color = "red", linewidth = 1) +
+  labs(
+    title = "Sales Predictions for Test Dataset",
+    x = "Date",
+    y = "Predicted Sales"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+    axis.text = element_text(size = 12),
+    axis.title = element_text(size = 13)
+  )
+
+# Display the plot
+print(predictions_plot)
+```
+
+The **weights used for each model** correspond to the inverse of their new cross-validation MAE:
+
+```{r}
+# Print the weights used for each model
+print("\nModel Weights (based on cross-validation MAE):")
+names(weights) <- c("Elastic Net", "Random Forest", "XGBoost", "KNN", "Neural Network")
+print(weights)
+```
+
+We can see **how these new predictions complete the time series data**:
+
+```{r}
+# Create a data frame for combined visualization
+train_plot_data <- data.frame(
+  Monday_date = train_sales_data$Monday_date,
+  Sales = train_sales_data$Sales,
+  Type = "Historical"
+)
+
+test_plot_data <- data.frame(
+  Monday_date = test_sales_data$Monday_date,
+  Sales = test_sales_data$predicted_sales,
+  Type = "Predicted"
+)
+
+combined_plot_data <- rbind(train_plot_data, test_plot_data)
+
+# Create the combined time series plot
+combined_plot <- ggplot(combined_plot_data, aes(x = Monday_date, y = Sales, color = Type)) +
+  geom_line(linewidth = 1) +
+  geom_vline(xintercept = as.numeric(min(test_sales_data$Monday_date)), 
+             linetype = "dashed", color = "gray50") +
+  scale_color_manual(values = c("Historical" = "blue", "Predicted" = "red")) +
+  labs(
+    title = "Historical and Predicted Sales Over Time",
+    x = "Date",
+    y = "Sales",
+    color = "Data Type"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+    axis.text = element_text(size = 12),
+    axis.title = element_text(size = 13),
+    legend.position = "bottom"
+  )
+
+# Display the plot
+print(combined_plot)
+```
+
+We notice the following:
+
+- **Alignment with Trends**: Predicted sales (red line) generally follow the overall trends of actual sales (blue line), demonstrating that the model captures the major seasonal and periodic patterns in sales.
+
+- **Stability in Predictions**: The predicted values show a smoother trajectory compared to the actual sales, suggesting that the model avoids overfitting but may underperform during sharp sales peaks or drops.
+
+Finally, we save our results in **our submission file**:
+
+```{r}
+# Create and save the predictions file
+predictions_df <- data.frame(
+  Monday_date = format(test_sales_data$Monday_date, "%Y-%m-%d"),
+  Sales = round(test_sales_data$predicted_sales, 0)  # Rounding to whole numbers
+)
+
+# Write to CSV
+write.csv(predictions_df, file = "Juanro.csv", row.names = FALSE, quote = FALSE)
+
+# Print first few rows of the saved predictions
+cat("\nFirst few rows of saved predictions:\n")
+head(predictions_df)
+```
+
+# Final Analysis of Investment Variables and Predicted Sales
+
+This section focuses on the interpretability of the model, particularly analyzing how **investment variables** affect the sales. The objective is to identify the key drivers of sales among the investment-related features, providing actionable insights for future strategies. We will base this analysis on:
+
+- The **features selected by Elastic Net**,`elastic_grid`. Giving *only* these features to the other models consistently improved performance.
+- The feature importance according to **the best-performing (individual) model** trained with all data, `xgb_grid_final`.
+
+## Feature Selection (Elastic Net) and Interpretation
+
+All the investment variables are:
+
+```{r}
+investment_vars
+```
+
+Out of these, `elastic_grid` only chose the following:
+
+```{r}
+selected_features
+```
+
+Investment channels selected and excluded:
+
+- **All major TV-related investments were selected** (both traditional TV and HBTV), including their lagged effects and store interactions. This highlights their importance in determining sales.
+- **Digital marketing channels were also included.** These include Meta, Affiliates, and Search Brand (`sea_brand`).
+- **Radio, TikTok, and Database investments were excluded.** Therefore, these investments do not significantly impact sales, not even when considering interaction or lagged effects.
+
+Important patterns:
+
+- **There are strong temporal effects**: There were multiple lag terms selected for search brand (lag1, lag2) and TV HBTV (lag1, lag2).
+- **Store interaction terms**: The store interactions were selected for TV, HBTV, and Meta investments, suggesting these channels' effectiveness varies with store presence.
+- **Channel synergies**: Specific interaction between Affiliates and OOH investment indicates complementarity between these two channels.
+
+## Feature Importance (XGBoost) and Interpretation
+
+We can **extract feature importance** according to the final XGBoost model with the following code snippet:
+
+```{r}
+# Extract feature importance using the exact feature names from the model
+xgb_importance <- xgb.importance(
+  feature_names = xgb_grid_final$finalModel$feature_names,
+  model = xgb_grid_final$finalModel
+)
+
+# Filter for investment-related features and create analysis dataframe
+investment_importance <- xgb_importance %>%
+  mutate(
+    is_elastic_net = Feature %in% selected_features,
+    feature_type = case_when(
+      grepl(":", Feature) ~ "Interaction",
+      grepl("_lag", Feature) ~ "Lagged",
+      grepl("_is_zero", Feature) ~ "Zero Indicator",
+      grepl("seasonal|vacation", Feature) ~ "Seasonal/Vacation",
+      TRUE ~ "Direct Investment"
+    ),
+    feature_category = case_when(
+      grepl("TV", Feature) ~ "TV",
+      grepl("Meta", Feature) ~ "Meta",
+      grepl("sea_brand", Feature) ~ "Search Brand",
+      grepl("Affiliates", Feature) ~ "Affiliates",
+      grepl("OOH", Feature) ~ "OOH",
+      TRUE ~ "Other"
+    )
+  ) %>%
+  arrange(desc(Gain))
+
+# Create feature importance plot
+importance_plot <- ggplot(
+  head(investment_importance, 15),
+  aes(x = reorder(Feature, Gain), y = Gain, fill = feature_type)
+) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  scale_fill_brewer(palette = "Set3") +
+  labs(
+    title = "Top 15 Features by Importance",
+    subtitle = "Colored by Feature Type",
+    x = "Feature",
+    y = "Importance (Gain)",
+    fill = "Feature Type"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.y = element_text(size = 8),
+    legend.position = "bottom"
+  )
+
+# Display the importance plot
+print(importance_plot)
+```
+
+Most important features:
+
+- **GBP** shows highest importance by far, indicating a strong dependence of sales with the company's positioning on Google.
+- **Christmas vacation period** has second-highest importance, suggesting an important effect of this vacation on sales.
+- **Seasonal indicators** come next, confirming the seasonal demand of the business.
+- **TV investment and its store interaction** are significant drivers.
+- **The lagged effects of brand Search Engine Advertising** (lag1, lag2) demonstrate persistent impact.
+
+Channel-specific insights:
+
+- **Traditional TV investment shows higher importance than HBTV**.
+- **Meta investment appears in the top 10**, confirming its significance.
+- **Search Engine Advertising shows importance** through both current and lagged effects.
+
+## Actionable Recommendations
+
+Investment prioritization:
+
+- Maintain **strong TV presence**.
+- Continue **investment in Meta and brand Search Engine Advertising**.
+- Consider **reducing or eliminating investment in unselected channels** (Radio, TikTok, Database).
+
+Temporal strategy:
+
+- Plan **Search Engine Advertising** with long-term effects in mind.
+- Account for **1-2 week lag in campaign effectiveness** in this case.
+- Adjust investment timing **around Christmas vacation period**.
+
