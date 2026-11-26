@@ -2,9 +2,7 @@
 title: "Predictive Modeling Techniques in Big Data Analytics: Advanced Regression and Prediction"
 author: 
   - name: "Juan del Mazo Vázquez"
-    id: "100537373"
   - name: "Rodrigo Castro Freibott"
-    id: "100533766"
 date: "2025-01-19"
 output: 
   html_document:
